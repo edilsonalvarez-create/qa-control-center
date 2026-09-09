@@ -27,10 +27,38 @@ var DOC_MIME = "application/vnd.google-apps.document";
 var XLSX = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
 var DOCX = "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
 
+function hardcodedSecret_() {
+  try {
+    return String(HARDCODED_CRON_SECRET || "");
+  } catch (err) {
+    return "";
+  }
+}
+
+function setup() {
+  var props = PropertiesService.getScriptProperties();
+  props.setProperty("API_URL", "https://api-production-f1d3.up.railway.app");
+  props.setProperty("FOLDER_ID", "1hCe3QBPraJEvt6H60KcCOiNIFzG6zdL-");
+  var injected = hardcodedSecret_();
+  if (injected) props.setProperty("CRON_SECRET", injected);
+  installTrigger();
+  syncDriveOnce();
+}
+
+function installTrigger() {
+  var triggers = ScriptApp.getProjectTriggers();
+  for (var i = 0; i < triggers.length; i++) {
+    if (triggers[i].getHandlerFunction() === "syncDriveOnce") {
+      ScriptApp.deleteTrigger(triggers[i]);
+    }
+  }
+  ScriptApp.newTrigger("syncDriveOnce").timeBased().atHour(6).everyDays(1).inTimezone("America/Bogota").create();
+}
+
 function syncDriveOnce() {
   var props = PropertiesService.getScriptProperties();
   var apiUrl = String(props.getProperty("API_URL") || "").replace(/\/$/, "");
-  var secret = props.getProperty("CRON_SECRET");
+  var secret = props.getProperty("CRON_SECRET") || hardcodedSecret_();
   var folderId = props.getProperty("FOLDER_ID") || "1hCe3QBPraJEvt6H60KcCOiNIFzG6zdL-";
   if (!apiUrl || !secret) {
     throw new Error("Set API_URL and CRON_SECRET in Script properties");

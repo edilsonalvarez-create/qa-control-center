@@ -77,7 +77,7 @@ export async function getDriveSyncStatus(config: AppConfig) {
       timezone: config.DRIVE_SYNC_TZ,
       enabled: config.DRIVE_SYNC_ENABLED !== "false" && config.DRIVE_SYNC_ENABLED !== "0",
     },
-    pushIngestEnabled: Boolean(config.CRON_SECRET),
+    pushIngestEnabled: true,
   };
 }
 

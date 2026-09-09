@@ -27,3 +27,6 @@ apps/api/prisma/*.db-journal
 .env*
 !.env.example
 .vercel
+scripts/gas/
+scripts/.cron-secret
+.clasprc.json

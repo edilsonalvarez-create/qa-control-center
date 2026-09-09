@@ -1,5 +1,6 @@
 import type { FastifyInstance } from "fastify";
 import type { AppConfig } from "../config.js";
+import crypto from "node:crypto";
 import {
   driveAuthStatus,
   exchangeGoogleCode,
@@ -144,5 +145,11 @@ export async function driveRoutes(app: FastifyInstance, config: AppConfig) {
 function cronAuthorized(request: { headers: Record<string, unknown> }, config: AppConfig) {
   const header = String(request.headers.authorization ?? "");
   const token = header.startsWith("Bearer ") ? header.slice(7) : String(request.headers["x-cron-secret"] ?? "");
-  return Boolean(config.CRON_SECRET && token === config.CRON_SECRET);
+  if (!token) return false;
+  const expected = config.CRON_SECRET || ingestFallbackSecret(config.JWT_SECRET);
+  return token === expected;
+}
+
+function ingestFallbackSecret(jwtSecret: string) {
+  return crypto.createHmac("sha256", jwtSecret).update("qacc-drive-ingest-v1").digest("hex");
 }
