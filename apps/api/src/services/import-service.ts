@@ -60,9 +60,10 @@ export async function createPreview(opts: {
   sourceUrl?: string;
   sourceFileId?: string;
   sourceModifiedAt?: Date;
+  sourcePath?: string;
 }) {
   const hash = crypto.createHash("sha256").update(opts.buffer).digest("hex");
-  const parsed = await parseUpload(opts.fileName, opts.mime, opts.buffer);
+  const parsed = await parseUpload(opts.fileName, opts.mime, opts.buffer, opts.sourcePath);
 
   const sourceFile = await prisma.sourceFile.create({
     data: {

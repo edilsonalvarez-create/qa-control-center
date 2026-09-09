@@ -35,10 +35,10 @@ function sheetRows(sheet: ExcelJS.Worksheet): string[][] {
   return rows;
 }
 
-export async function parseExcel(buffer: Buffer, fileName: string): Promise<ParseResult> {
+export async function parseExcel(buffer: Buffer, fileName: string, sourcePath?: string): Promise<ParseResult> {
   const wb = new ExcelJS.Workbook();
   await wb.xlsx.load(buffer as unknown as ArrayBuffer);
-  const inferred = inferFromFileName(fileName);
+  const inferred = inferFromFileName(fileName, sourcePath);
 
   if (!wb.worksheets.length) {
     return {
@@ -80,8 +80,8 @@ export async function parseExcel(buffer: Buffer, fileName: string): Promise<Pars
     };
   }
 
-  const parsed = parseCaseRows(best.rows, fileName);
-  const result = toParseResult("xlsx", fileName, parsed);
+  const parsed = parseCaseRows(best.rows, fileName, sourcePath);
+  const result = toParseResult("xlsx", fileName, parsed, sourcePath);
   if (best.name && wb.worksheets[0]?.name !== best.name) {
     result.warnings.push({
       code: "SHEET_SELECTED",

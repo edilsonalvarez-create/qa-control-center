@@ -19,13 +19,13 @@ export function scoreSheetName(name: string): number {
   return 0;
 }
 
-export function parseCaseRows(rows: string[][], fileName: string): {
+export function parseCaseRows(rows: string[][], fileName: string, sourcePath?: string): {
   headers: HeaderMapping[];
   cases: ParsedCase[];
   warnings: ParseWarning[];
   headerIdx: number;
 } {
-  const inferred = inferFromFileName(fileName);
+  const inferred = inferFromFileName(fileName, sourcePath);
   const warnings: ParseWarning[] = [];
   let headerIdx = -1;
   let bestScore = -1;
@@ -116,8 +116,9 @@ export function toParseResult(
   fileType: string,
   fileName: string,
   parsed: { headers: HeaderMapping[]; cases: ParsedCase[]; warnings: ParseWarning[] },
+  sourcePath?: string,
 ): ParseResult {
-  const inferred = inferFromFileName(fileName);
+  const inferred = inferFromFileName(fileName, sourcePath);
   const cases = parsed.cases;
   return {
     fileType,

@@ -6,21 +6,26 @@ import { parsePlaywrightJson } from "./playwright-json.js";
 import { inferFromFileName, looksLikeCopy } from "./normalize.js";
 import type { ParseResult } from "./types.js";
 
-export async function parseUpload(fileName: string, mime: string, buffer: Buffer): Promise<ParseResult> {
+export async function parseUpload(
+  fileName: string,
+  mime: string,
+  buffer: Buffer,
+  sourcePath?: string,
+): Promise<ParseResult> {
   const lower = fileName.toLowerCase();
-  const inferred = inferFromFileName(fileName);
+  const inferred = inferFromFileName(fileName, sourcePath);
   let result: ParseResult;
 
   if (lower.endsWith(".xlsx") || lower.endsWith(".xls") || mime.includes("spreadsheet")) {
-    result = await parseExcel(buffer, fileName);
+    result = await parseExcel(buffer, fileName, sourcePath);
   } else if (lower.endsWith(".csv") || mime.includes("csv")) {
-    result = parseCsv(buffer.toString("utf8"), fileName);
+    result = parseCsv(buffer.toString("utf8"), fileName, sourcePath);
   } else if (lower.endsWith(".docx") || mime.includes("wordprocessingml")) {
-    result = await parseDocx(buffer, fileName);
+    result = await parseDocx(buffer, fileName, sourcePath);
   } else if (lower.endsWith(".pdf") || mime.includes("pdf")) {
-    result = await parsePdf(buffer, fileName);
+    result = await parsePdf(buffer, fileName, sourcePath);
   } else if (lower.endsWith(".json") || mime.includes("json")) {
-    result = parsePlaywrightJson(buffer.toString("utf8"), fileName);
+    result = parsePlaywrightJson(buffer.toString("utf8"), fileName, sourcePath);
   } else {
     result = {
       fileType: "unknown",

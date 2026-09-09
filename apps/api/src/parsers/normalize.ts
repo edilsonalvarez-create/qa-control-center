@@ -98,18 +98,47 @@ export function looksLikeCopy(fileName: string): boolean {
   return /^copia de\s+/i.test(fileName) || /\bcopy of\b/i.test(fileName);
 }
 
-export function inferFromFileName(fileName: string) {
-  const n = fileName.toLowerCase();
-  let project: string | undefined;
-  let moduleName: string | undefined;
-  let testType = "FUNCTIONAL";
-  let environment: string | undefined;
+function pathHint(value: string): string {
+  return value
+    .replace(/\\/g, "/")
+    .normalize("NFD")
+    .replace(/\p{Diacritic}/gu, "")
+    .toLowerCase()
+    .replace(/\s+/g, " ")
+    .replace(/ ?\/ ?/g, "/")
+    .trim();
+}
 
+function projectFromNameHints(text: string): string | undefined {
+  const n = text.toLowerCase();
+  let project: string | undefined;
   if (n.includes("sumimedical") || n.includes("sumi")) project = "SUMIMEDICAL";
   if (n.includes("medicina") || n.includes("m.i") || n.includes("horus-m.i")) project = "MEDICINA INTEGRAL";
   if (n.includes("ferro")) project = "FERROCARRILES";
   if (n.includes("sanova")) project = "SANOVA";
-  if (!project && /(matriz_qa|ejecucion_qa|horus)/i.test(n)) project = "SUMIMEDICAL";
+  return project;
+}
+
+function projectFromDrivePath(sourcePath?: string): string | undefined {
+  if (!sourcePath) return undefined;
+  const key = pathHint(sourcePath);
+  const folders = key.split("/").filter(Boolean).slice(0, -1);
+  const hay = folders.join("/");
+  if (!hay) return undefined;
+  if (/(^|\/)medicina integral(\/|$)/.test(hay) || /(^|\/)test-medicina/.test(hay)) return "MEDICINA INTEGRAL";
+  if (/(^|\/)sumimedical(\/|$)/.test(hay) || /(^|\/)test-sumi/.test(hay)) return "SUMIMEDICAL";
+  if (/(^|\/)ferro/.test(hay) || /(^|\/)test-ferro/.test(hay)) return "FERROCARRILES";
+  if (/(^|\/)sanova(\/|$)/.test(hay) || /(^|\/)test-sanova/.test(hay)) return "SANOVA";
+  return undefined;
+}
+
+export function inferFromFileName(fileName: string, sourcePath?: string) {
+  const n = fileName.toLowerCase();
+  let moduleName: string | undefined;
+  let testType = "FUNCTIONAL";
+  let environment: string | undefined;
+  let project = projectFromDrivePath(sourcePath) ?? projectFromNameHints(fileName);
+  if (!project && /(matriz_qa|ejecucion_qa|horus)/i.test(n) && !/horus-m\.i/i.test(n)) project = "SUMIMEDICAL";
 
   if (n.includes("playwright") || n.includes(".spec.")) testType = "E2E";
   if (n.includes("rtm")) testType = "RTM";

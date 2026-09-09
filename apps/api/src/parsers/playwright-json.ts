@@ -7,8 +7,8 @@ type PwSpec = {
   tests?: Array<{ title?: string; results?: Array<{ status?: string }>; status?: string }>;
 };
 
-export function parsePlaywrightJson(text: string, fileName: string): ParseResult {
-  const inferred = inferFromFileName(fileName);
+export function parsePlaywrightJson(text: string, fileName: string, sourcePath?: string): ParseResult {
+  const inferred = inferFromFileName(fileName, sourcePath);
   let json: unknown;
   try {
     json = JSON.parse(text);

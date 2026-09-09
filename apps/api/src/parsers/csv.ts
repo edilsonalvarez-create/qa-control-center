@@ -31,8 +31,8 @@ function parseCsvText(text: string): string[][] {
   return rows;
 }
 
-export function parseCsv(text: string, fileName: string): ParseResult {
+export function parseCsv(text: string, fileName: string, sourcePath?: string): ParseResult {
   const rows = parseCsvText(text);
-  const parsed = parseCaseRows(rows, fileName);
-  return toParseResult("csv", fileName, parsed);
+  const parsed = parseCaseRows(rows, fileName, sourcePath);
+  return toParseResult("csv", fileName, parsed, sourcePath);
 }

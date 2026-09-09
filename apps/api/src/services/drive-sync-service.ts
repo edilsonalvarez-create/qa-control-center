@@ -251,6 +251,7 @@ async function importDriveBuffer(opts: {
     sourceUrl: opts.sourceUrl,
     sourceFileId: opts.sourceFileId,
     sourceModifiedAt: opts.sourceModifiedAt,
+    sourcePath: opts.path,
   });
   const preview = job.previewJson as {
     counts?: { total?: number };

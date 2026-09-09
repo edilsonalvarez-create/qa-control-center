@@ -6,6 +6,7 @@ import { parseExcel } from "../src/parsers/excel.js";
 import {
   extractNarrativeMetrics,
   fingerprint,
+  inferFromFileName,
   looksLikeCopy,
   mapStatus,
 } from "../src/parsers/normalize.js";
@@ -116,6 +117,18 @@ describe("excel parser", () => {
     expect(result.cases[0].status).toBe("PASS");
     expect(result.cases[1].status).toBe("FAIL");
     expect(result.detectedProject).toBe("SUMIMEDICAL");
+  });
+});
+
+describe("project from Drive folder", () => {
+  it("assigns MEDICINA INTEGRAL from the folder path even if the file is named Matriz_QA", () => {
+    const fromFolder = inferFromFileName(
+      "Matriz_QA_Escalas_Respiratorias.xlsx",
+      "MEDICINA INTEGRAL/Matriz_QA_Escalas_Respiratorias.xlsx",
+    );
+    expect(fromFolder.project).toBe("MEDICINA INTEGRAL");
+    expect(inferFromFileName("Matriz_QA_Atencion_Particular.xlsx").project).toBe("SUMIMEDICAL");
+    expect(inferFromFileName("Validacion_Modulos_Horus-M.I.xlsx").project).toBe("MEDICINA INTEGRAL");
   });
 });
 
