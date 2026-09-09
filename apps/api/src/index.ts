@@ -14,7 +14,7 @@ import { importRoutes } from "./routes/import.js";
 
 async function build() {
   const config = loadConfig();
-  const app = Fastify({ logger });
+  const app = Fastify({ logger: { level: config.LOG_LEVEL } });
 
   const origins = config.CORS_ORIGINS.split(",").map((s) => s.trim()).filter(Boolean);
   await app.register(cors, {
