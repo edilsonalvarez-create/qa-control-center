@@ -107,9 +107,8 @@ CRON_SECRET=<random>
 ```
 
 5. Open the live app → Settings → **Conectar Google Drive** with an account that can read the folder.
-6. Optional backup: GitHub secrets `API_URL` + `CRON_SECRET` for `.github/workflows/drive-sync.yml`.
 
-Never commit client secrets. Never paste a Google password into the app.
+The daily job runs inside the Railway API (`node-cron` at 06:00 America/Bogota). Never commit client secrets. Never paste a Google password into the app.
 
 Unattended alternatives (Railway only): `GOOGLE_REFRESH_TOKEN` or `GOOGLE_SERVICE_ACCOUNT_JSON` (share the folder with the service account email).
 
