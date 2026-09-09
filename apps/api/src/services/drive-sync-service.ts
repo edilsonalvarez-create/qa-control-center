@@ -88,6 +88,38 @@ export async function beginPushIngest(config: AppConfig, trigger: SyncTrigger = 
   return { id: run.id, status: run.status };
 }
 
+async function hasImportedResults(driveFileId?: string) {
+  if (!driveFileId) return false;
+  const previous = await prisma.sourceFile.findMany({
+    where: { sourceFileId: driveFileId },
+    select: { id: true },
+  });
+  if (!previous.length) return false;
+  const runs = await prisma.testRun.findMany({
+    where: { sourceFileId: { in: previous.map((f) => f.id) } },
+    select: { passed: true, failed: true, blocked: true },
+  });
+  return runs.some((r) => r.passed + r.failed + r.blocked > 0);
+}
+
+async function replacePreviousDriveRuns(driveFileId: string) {
+  const previous = await prisma.sourceFile.findMany({
+    where: { sourceFileId: driveFileId },
+    select: { id: true },
+  });
+  if (!previous.length) return;
+  const sourceIds = previous.map((f) => f.id);
+  const runs = await prisma.testRun.findMany({
+    where: { sourceFileId: { in: sourceIds } },
+    select: { id: true },
+  });
+  const runIds = runs.map((r) => r.id);
+  if (!runIds.length) return;
+  await prisma.defect.deleteMany({ where: { testRunId: { in: runIds } } });
+  await prisma.evidence.deleteMany({ where: { testRunId: { in: runIds } } });
+  await prisma.testRun.deleteMany({ where: { id: { in: runIds } } });
+}
+
 export async function ingestPushedFile(
   config: AppConfig,
   opts: {
@@ -99,6 +131,7 @@ export async function ingestPushedFile(
     sourceUrl?: string;
     sourceModifiedAt?: Date;
     path?: string;
+    force?: boolean;
   },
 ) {
   const runId = opts.runId ?? (await beginPushIngest(config)).id;
@@ -114,7 +147,7 @@ export async function ingestPushedFile(
       })
     : null;
   const modified = opts.sourceModifiedAt ?? new Date();
-  const decision = decideDriveFile({
+  let decision = decideDriveFile({
     path: opts.path ?? opts.fileName,
     name: opts.fileName,
     mimeType: opts.mime,
@@ -122,6 +155,9 @@ export async function ingestPushedFile(
     driveModified: modified,
     existing: existing ? { sourceModifiedAt: existing.sourceModifiedAt } : null,
   });
+  if (decision === "skip_unchanged" && (opts.force || !(await hasImportedResults(opts.sourceFileId)))) {
+    decision = "process";
+  }
 
   const actions = Array.isArray(run.summaryJson) ? [...(run.summaryJson as FileAction[])] : [];
   let filesImported = run.filesImported;
@@ -204,6 +240,9 @@ async function importDriveBuffer(opts: {
   path: string;
 }): Promise<FileAction> {
   const userId = await actorUserId();
+  if (opts.sourceFileId) {
+    await replacePreviousDriveRuns(opts.sourceFileId);
+  }
   const job = await createPreview({
     userId,
     fileName: opts.fileName,
@@ -293,7 +332,7 @@ async function executeDriveSync(config: AppConfig, runId: string) {
         where: { sourceFileId: file.id },
         orderBy: { createdAt: "desc" },
       });
-      const decision = decideDriveFile({
+      let decision = decideDriveFile({
         path: file.path,
         name: file.name,
         mimeType: file.mimeType,
@@ -301,6 +340,9 @@ async function executeDriveSync(config: AppConfig, runId: string) {
         driveModified: file.modifiedTime,
         existing: existing ? { sourceModifiedAt: existing.sourceModifiedAt } : null,
       });
+      if (decision === "skip_unchanged" && !(await hasImportedResults(file.id))) {
+        decision = "process";
+      }
 
       if (decision !== "process") {
         filesSkipped += 1;

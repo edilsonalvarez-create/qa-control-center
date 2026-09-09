@@ -1,7 +1,6 @@
 import ExcelJS from "exceljs";
-import { isLikelyHeaderRow } from "./columns.js";
 import { inferFromFileName } from "./normalize.js";
-import { parseCaseRows, scoreHeaderRow, toParseResult } from "./table.js";
+import { parseCaseRows, scoreHeaderRow, scoreSheetName, toParseResult } from "./table.js";
 import type { ParseResult } from "./types.js";
 
 function cellStr(value: ExcelJS.CellValue): string {
@@ -57,9 +56,9 @@ export async function parseExcel(buffer: Buffer, fileName: string): Promise<Pars
   let best: { rows: string[][]; score: number; name: string } | undefined;
   for (const sheet of wb.worksheets) {
     const rows = sheetRows(sheet);
-    const headerIdx = rows.findIndex((r) => isLikelyHeaderRow(r));
-    if (headerIdx < 0) continue;
-    const score = scoreHeaderRow(rows[headerIdx]);
+    const rowScore = rows.reduce((max, row) => Math.max(max, scoreHeaderRow(row)), -1);
+    if (rowScore < 0) continue;
+    const score = rowScore + scoreSheetName(sheet.name);
     if (!best || score > best.score) best = { rows, score, name: sheet.name };
   }
 

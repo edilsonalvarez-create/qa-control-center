@@ -76,7 +76,7 @@ export async function createPreview(opts: {
     },
   });
 
-  const duplicates = await findDuplicates(parsed, hash, opts.fileName);
+  const duplicates = await findDuplicates(parsed, hash, opts.fileName, opts.sourceFileId);
   const preview = buildPreview(parsed, duplicates, opts.fileName);
 
   const job = await prisma.importJob.create({
@@ -112,7 +112,7 @@ export async function createPreview(opts: {
   return job;
 }
 
-async function findDuplicates(parsed: ParseResult, hash: string, fileName: string) {
+async function findDuplicates(parsed: ParseResult, hash: string, fileName: string, driveFileId?: string) {
   const out: Array<{
     fingerprint: string;
     reason: string;
@@ -121,10 +121,14 @@ async function findDuplicates(parsed: ParseResult, hash: string, fileName: strin
   }> = [];
 
   const sameHash = await prisma.sourceFile.findMany({
-    where: { contentHash: hash },
+    where: {
+      contentHash: hash,
+      ...(driveFileId ? { NOT: { sourceFileId: driveFileId } } : {}),
+    },
     take: 5,
   });
-  if (sameHash.length > 1 || looksLikeCopy(fileName)) {
+  const hashHits = driveFileId ? sameHash.length > 0 : sameHash.length > 1;
+  if (hashHits || looksLikeCopy(fileName)) {
     out.push({
       fingerprint: hash,
       reason: looksLikeCopy(fileName)
@@ -138,7 +142,12 @@ async function findDuplicates(parsed: ParseResult, hash: string, fileName: strin
   for (const c of parsed.cases.slice(0, 200)) {
     if (!c.fingerprint) continue;
     const existing = await prisma.testCase.findFirst({
-      where: { fingerprint: c.fingerprint },
+      where: {
+        fingerprint: c.fingerprint,
+        ...(driveFileId
+          ? { NOT: { testRun: { sourceFile: { sourceFileId: driveFileId } } } }
+          : {}),
+      },
       include: { testRun: true },
     });
     if (existing) {

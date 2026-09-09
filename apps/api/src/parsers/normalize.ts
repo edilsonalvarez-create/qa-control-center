@@ -109,6 +109,7 @@ export function inferFromFileName(fileName: string) {
   if (n.includes("medicina") || n.includes("m.i") || n.includes("horus-m.i")) project = "MEDICINA INTEGRAL";
   if (n.includes("ferro")) project = "FERROCARRILES";
   if (n.includes("sanova")) project = "SANOVA";
+  if (!project && /(matriz_qa|ejecucion_qa|horus)/i.test(n)) project = "SUMIMEDICAL";
 
   if (n.includes("playwright") || n.includes(".spec.")) testType = "E2E";
   if (n.includes("rtm")) testType = "RTM";

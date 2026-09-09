@@ -120,6 +120,7 @@ export async function driveRoutes(app: FastifyInstance, config: AppConfig) {
         sourceUrl: fields.sourceUrl || undefined,
         sourceModifiedAt: Number.isNaN(modified.getTime()) ? new Date() : modified,
         path: fields.path || fileName,
+        force: fields.force === "1" || fields.force === "true",
       });
     } catch (err) {
       const e = err as Error & { statusCode?: number };

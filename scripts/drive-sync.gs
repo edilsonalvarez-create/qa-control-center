@@ -45,6 +45,16 @@ function setup() {
   syncDriveOnce();
 }
 
+function resyncAll() {
+  PropertiesService.getScriptProperties().deleteProperty("LAST_SYNC_MS");
+  var guard = 0;
+  var sent;
+  do {
+    sent = syncDriveOnce(true);
+    guard++;
+  } while (sent > 0 && guard < 40);
+}
+
 function installTrigger() {
   var triggers = ScriptApp.getProjectTriggers();
   for (var i = 0; i < triggers.length; i++) {
@@ -55,7 +65,8 @@ function installTrigger() {
   ScriptApp.newTrigger("syncDriveOnce").timeBased().atHour(6).everyDays(1).inTimezone("America/Bogota").create();
 }
 
-function syncDriveOnce() {
+function syncDriveOnce(force) {
+  force = force === true;
   var props = PropertiesService.getScriptProperties();
   var apiUrl = String(props.getProperty("API_URL") || "").replace(/\/$/, "");
   var secret = props.getProperty("CRON_SECRET") || hardcodedSecret_();
@@ -106,6 +117,7 @@ function syncDriveOnce() {
         sourceUrl: item.file.getUrl(),
         sourceModifiedAt: item.modified.toISOString(),
         path: item.path,
+        force: force ? "1" : "0",
       },
       muteHttpExceptions: true,
     });
@@ -125,6 +137,7 @@ function syncDriveOnce() {
   });
 
   if (advancedTo > lastMs) props.setProperty("LAST_SYNC_MS", String(advancedTo));
+  return sent;
 }
 
 function collectFiles_(folder, prefix, out) {

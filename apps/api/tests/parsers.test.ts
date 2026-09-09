@@ -16,6 +16,9 @@ describe("header detection", () => {
     expect(mapHeader("Caso de prueba").role).toBe("title");
     expect(mapHeader("Resultado").role).toBe("status");
     expect(mapHeader("Estado").role).toBe("status");
+    expect(mapHeader("Estado de Ejecución").role).toBe("status");
+    expect(mapHeader("ID Caso").role).toBe("externalId");
+    expect(mapHeader("Escenario de Prueba").role).toBe("title");
     expect(mapHeader("//Estado//").role).toBe("status");
     expect(mapHeader("Estado de la prueba").role).toBe("status");
     expect(mapHeader("Módulo").role).toBe("module");
@@ -36,6 +39,8 @@ describe("status and metrics", () => {
     expect(mapStatus("No cumple")).toBe("FAIL");
     expect(mapStatus("Pendiente")).toBe("UNKNOWN");
     expect(mapStatus("No ejecutado")).toBe("UNKNOWN");
+    expect(mapStatus("Pasó")).toBe("PASS");
+    expect(mapStatus("Falló")).toBe("FAIL");
     expect(mapStatus("")).toBe("UNKNOWN");
     expect(mapStatus("maybe later")).toBe("REQUIRES_REVIEW");
   });
@@ -94,6 +99,23 @@ describe("excel parser", () => {
     expect(result.cases[0].status).toBe("PASS");
     expect(result.cases[1].status).toBe("FAIL");
     expect(result.warnings.some((w) => w.code === "SHEET_SELECTED")).toBe(true);
+  });
+
+  it("reads Estado de Ejecución from the matrix sheet, not the dashboard", async () => {
+    const wb = new ExcelJS.Workbook();
+    const dash = wb.addWorksheet("Dashboard & Métricas");
+    dash.addRow(["TOTAL CASOS", "CRÍTICOS", "PRIORIDAD ALTA"]);
+    dash.addRow(["9", "1", "6"]);
+    const matrix = wb.addWorksheet("Matriz de Pruebas QA");
+    matrix.addRow(["ID CP", "Título del Caso de Prueba", "Estado de Ejecución"]);
+    matrix.addRow(["TC-001", "FIXTURE particular", "Exitoso"]);
+    matrix.addRow(["TC-002", "FIXTURE falla", "Fallido"]);
+    const buffer = Buffer.from(await wb.xlsx.writeBuffer());
+    const result = await parseExcel(buffer, "Matriz_QA_Atencion_Particular.xlsx");
+    expect(result.cases).toHaveLength(2);
+    expect(result.cases[0].status).toBe("PASS");
+    expect(result.cases[1].status).toBe("FAIL");
+    expect(result.detectedProject).toBe("SUMIMEDICAL");
   });
 });
 

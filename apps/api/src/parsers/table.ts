@@ -1,12 +1,22 @@
-import { isLikelyHeaderRow, mapHeader, mappedCell } from "./columns.js";
+import { isLikelyHeaderRow, mapHeader, mappedCell, pickHeader } from "./columns.js";
 import { fingerprint, inferFromFileName, mapStatus, normalizeText } from "./normalize.js";
 import type { HeaderMapping, ParsedCase, ParseResult, ParseWarning } from "./types.js";
 
 export function scoreHeaderRow(cells: string[]): number {
+  const joined = cells.join(" ").toLowerCase();
+  if (/total casos|distribuci[oó]n por|resumen ejecutivo|dashboard de ejecuci/.test(joined)) return -1;
   if (!isLikelyHeaderRow(cells)) return -1;
   const mapped = cells.filter((c) => c && mapHeader(c).confidence >= 0.45).length;
   const hasEstado = cells.some((c) => mapHeader(c).role === "status" && /estado/i.test(c));
-  return mapped + (hasEstado ? 20 : 0);
+  const hasTitle = cells.some((c) => mapHeader(c).role === "title");
+  return mapped + (hasEstado ? 25 : 0) + (hasTitle ? 8 : 0);
+}
+
+export function scoreSheetName(name: string): number {
+  const n = name.toLowerCase();
+  if (/dashboard|resumen|m[eé]trica|hallazgo|flujo|cobertura/.test(n)) return -40;
+  if (/matriz/.test(n)) return 30;
+  return 0;
 }
 
 export function parseCaseRows(rows: string[][], fileName: string): {
@@ -70,6 +80,7 @@ export function parseCaseRows(rows: string[][], fileName: string): {
   for (const raw of rows.slice(headerIdx + 1)) {
     if (raw.every((c) => !normalizeText(c))) continue;
     const get = (role: HeaderMapping["role"]) => mappedCell(headers, raw, role);
+    if (pickHeader(headers, "externalId") && !get("externalId")) continue;
     const title = get("title") || get("externalId");
     if (!title) continue;
     const project = get("project") || inferred.project;
