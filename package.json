@@ -18,7 +18,8 @@
     "db:generate": "npm run prisma:generate --workspace=@qacc/api",
     "db:migrate": "npm run prisma:migrate --workspace=@qacc/api",
     "db:seed": "npm run prisma:seed --workspace=@qacc/api",
-    "db:push": "npm run prisma:push --workspace=@qacc/api"
+    "db:push": "npm run prisma:push --workspace=@qacc/api",
+    "start": "npm run start --workspace=@qacc/api"
   },
   "engines": {
     "node": ">=20"

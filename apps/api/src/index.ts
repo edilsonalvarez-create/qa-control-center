@@ -16,8 +16,16 @@ async function build() {
   const config = loadConfig();
   const app = Fastify({ logger });
 
-  const origins = config.CORS_ORIGINS.split(",").map((s) => s.trim());
-  await app.register(cors, { origin: origins, credentials: true });
+  const origins = config.CORS_ORIGINS.split(",").map((s) => s.trim()).filter(Boolean);
+  await app.register(cors, {
+    origin: (origin, cb) => {
+      if (!origin) return cb(null, true);
+      if (origins.includes("*") || origins.includes(origin)) return cb(null, true);
+      if (/^https:\/\/[\w.-]+\.vercel\.app$/.test(origin)) return cb(null, true);
+      cb(null, false);
+    },
+    credentials: true,
+  });
   await app.register(helmet, { contentSecurityPolicy: false });
   await app.register(jwt, { secret: config.JWT_SECRET, sign: { expiresIn: config.JWT_EXPIRES_IN } });
   await app.register(rateLimit, { max: config.RATE_LIMIT_MAX, timeWindow: "1 minute" });
