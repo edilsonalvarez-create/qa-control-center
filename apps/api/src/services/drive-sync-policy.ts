@@ -7,6 +7,7 @@ export const MAX_DRIVE_FILE_BYTES = 25 * 1024 * 1024;
 const JUNK_DIR =
   /(^|\/)(node_modules|\.git|\.svn|\.venv|dist|build|coverage|\.next|__pycache__|\.turbo)(\/|$)/i;
 const JUNK_NAME = /^(\.ds_store|thumbs\.db|desktop\.ini|package-lock\.json|yarn\.lock|pnpm-lock\.yaml)$/i;
+const EXCLUDED_DIR = /(^|\/)actividad de automatizacion(\/|$)/;
 const PARSEABLE_EXT = /\.(xlsx|xls|csv|pdf|docx|json)$/i;
 
 const GOOGLE_EXPORT: Record<string, { mime: string; ext: string }> = {
@@ -27,10 +28,22 @@ export type DriveFileDecision =
   | "skip_unchanged"
   | "skip_too_large";
 
+export function normalizeDrivePath(path: string): string {
+  return path
+    .replace(/\\/g, "/")
+    .normalize("NFD")
+    .replace(/\p{Diacritic}/gu, "")
+    .toLowerCase()
+    .replace(/\s+/g, " ")
+    .replace(/ ?\/ ?/g, "/")
+    .trim();
+}
+
 export function isJunkPath(path: string): boolean {
   const normalized = path.replace(/\\/g, "/");
   const name = normalized.split("/").pop() ?? normalized;
-  return JUNK_DIR.test(normalized) || JUNK_NAME.test(name);
+  const key = normalizeDrivePath(path);
+  return JUNK_DIR.test(normalized) || EXCLUDED_DIR.test(key) || JUNK_NAME.test(name);
 }
 
 export function googleExportSpec(mimeType: string) {

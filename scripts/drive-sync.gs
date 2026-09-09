@@ -21,6 +21,7 @@ var MAX_BYTES = 20 * 1024 * 1024;
 var PARSEABLE = /\.(xlsx|xls|csv|pdf|docx|json)$/i;
 var JUNK_DIR = /(^|\/)(node_modules|\.git|\.svn|\.venv|dist|build|coverage|\.next|__pycache__|\.turbo)(\/|$)/i;
 var JUNK_NAME = /^(\.ds_store|thumbs\.db|desktop\.ini|package-lock\.json|yarn\.lock|pnpm-lock\.yaml)$/i;
+var EXCLUDED_DIR = /(^|\/)actividad de automatizacion(\/|$)/;
 
 var SHEET_MIME = "application/vnd.google-apps.spreadsheet";
 var DOC_MIME = "application/vnd.google-apps.document";
@@ -140,19 +141,31 @@ function syncDriveOnce(force) {
   return sent;
 }
 
+function isJunkPath_(path) {
+  var n = String(path || "")
+    .replace(/\\/g, "/")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/\s+/g, " ")
+    .replace(/ ?\/ ?/g, "/")
+    .trim();
+  return JUNK_DIR.test(n) || EXCLUDED_DIR.test(n) || JUNK_NAME.test(n.split("/").pop() || n);
+}
+
 function collectFiles_(folder, prefix, out) {
   var folders = folder.getFolders();
   while (folders.hasNext()) {
     var child = folders.next();
     var childPath = prefix ? prefix + "/" + child.getName() : child.getName();
-    if (JUNK_DIR.test(childPath)) continue;
+    if (isJunkPath_(childPath)) continue;
     collectFiles_(child, childPath, out);
   }
   var iter = folder.getFiles();
   while (iter.hasNext()) {
     var file = iter.next();
     var path = prefix ? prefix + "/" + file.getName() : file.getName();
-    if (JUNK_DIR.test(path) || JUNK_NAME.test(file.getName())) continue;
+    if (isJunkPath_(path) || JUNK_NAME.test(file.getName())) continue;
     var mime = file.getMimeType();
     if (mime !== SHEET_MIME && mime !== DOC_MIME && !PARSEABLE.test(file.getName())) continue;
     out.push({ file: file, path: path, modified: file.getLastUpdated() });

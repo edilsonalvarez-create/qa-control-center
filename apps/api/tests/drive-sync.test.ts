@@ -14,6 +14,8 @@ describe("drive file selection", () => {
     expect(isJunkPath("Playwright/node_modules/playwright/index.js")).toBe(true);
     expect(isJunkPath("package-lock.json")).toBe(true);
     expect(isJunkPath("SUMIMEDICAL/Matriz_QA_HORUS.xlsx")).toBe(false);
+    expect(isJunkPath("actividad de automatización/playwright/results.json")).toBe(true);
+    expect(isJunkPath("SUMIMEDICAL/actividad de automatizacion /login.spec.ts")).toBe(true);
   });
 
   it("accepts QA matrices, reports and Google Docs exports", () => {
@@ -55,6 +57,16 @@ describe("drive file selection", () => {
       decideDriveFile({
         path: "suite/node_modules/foo.json",
         name: "foo.json",
+        mimeType: "application/json",
+        sizeBytes: 10,
+        driveModified,
+        existing: null,
+      }),
+    ).toBe("skip_junk");
+    expect(
+      decideDriveFile({
+        path: "actividad de automatización/results.json",
+        name: "results.json",
         mimeType: "application/json",
         sizeBytes: 10,
         driveModified,

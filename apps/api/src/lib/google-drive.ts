@@ -1,7 +1,7 @@
 import { google, type drive_v3 } from "googleapis";
 import crypto from "node:crypto";
 import type { AppConfig } from "../config.js";
-import { exportedFileName, googleExportSpec } from "../services/drive-sync-policy.js";
+import { exportedFileName, googleExportSpec, isJunkPath } from "../services/drive-sync-policy.js";
 import { prisma } from "./prisma.js";
 
 const DRIVE_SCOPES = [
@@ -175,6 +175,7 @@ export async function listDriveTree(
       for (const f of res.data.files ?? []) {
         if (!f.id || !f.name) continue;
         const path = parent.path ? `${parent.path}/${f.name}` : f.name;
+        if (isJunkPath(path)) continue;
         if (f.mimeType === "application/vnd.google-apps.folder") {
           queue.push({ id: f.id, path });
           continue;
