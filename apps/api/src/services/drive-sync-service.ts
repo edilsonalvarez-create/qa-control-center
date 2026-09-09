@@ -11,7 +11,7 @@ import { prisma } from "../lib/prisma.js";
 import { commitImport, createPreview } from "./import-service.js";
 import { decideDriveFile, shouldAutoCommit } from "./drive-sync-policy.js";
 
-export type SyncTrigger = "CRON" | "MANUAL" | "HTTP";
+export type SyncTrigger = "CRON" | "MANUAL" | "HTTP" | "APPS_SCRIPT";
 
 type FileAction = {
   fileName: string;
@@ -77,6 +77,169 @@ export async function getDriveSyncStatus(config: AppConfig) {
       timezone: config.DRIVE_SYNC_TZ,
       enabled: config.DRIVE_SYNC_ENABLED !== "false" && config.DRIVE_SYNC_ENABLED !== "0",
     },
+    pushIngestEnabled: Boolean(config.CRON_SECRET),
+  };
+}
+
+export async function beginPushIngest(config: AppConfig, trigger: SyncTrigger = "APPS_SCRIPT") {
+  const run = await prisma.driveSyncRun.create({
+    data: { status: "RUNNING", trigger },
+  });
+  return { id: run.id, status: run.status };
+}
+
+export async function ingestPushedFile(
+  config: AppConfig,
+  opts: {
+    runId?: string;
+    fileName: string;
+    mime: string;
+    buffer: Buffer;
+    sourceFileId?: string;
+    sourceUrl?: string;
+    sourceModifiedAt?: Date;
+    path?: string;
+  },
+) {
+  const runId = opts.runId ?? (await beginPushIngest(config)).id;
+  const run = await prisma.driveSyncRun.findUnique({ where: { id: runId } });
+  if (!run || run.status !== "RUNNING") {
+    throw Object.assign(new Error("Sync run not found or already finished"), { statusCode: 409 });
+  }
+
+  const existing = opts.sourceFileId
+    ? await prisma.sourceFile.findFirst({
+        where: { sourceFileId: opts.sourceFileId },
+        orderBy: { createdAt: "desc" },
+      })
+    : null;
+  const modified = opts.sourceModifiedAt ?? new Date();
+  const decision = decideDriveFile({
+    path: opts.path ?? opts.fileName,
+    name: opts.fileName,
+    mimeType: opts.mime,
+    sizeBytes: opts.buffer.length,
+    driveModified: modified,
+    existing: existing ? { sourceModifiedAt: existing.sourceModifiedAt } : null,
+  });
+
+  const actions = Array.isArray(run.summaryJson) ? [...(run.summaryJson as FileAction[])] : [];
+  let filesImported = run.filesImported;
+  let filesSkipped = run.filesSkipped;
+  let filesPreview = run.filesPreview;
+  let filesFailed = run.filesFailed;
+  const filesSeen = run.filesSeen + 1;
+
+  let result: FileAction;
+  if (decision !== "process") {
+    filesSkipped += 1;
+    result = { fileName: opts.fileName, path: opts.path ?? opts.fileName, action: "skipped", reason: decision };
+  } else {
+    try {
+      result = await importDriveBuffer({
+        fileName: opts.fileName,
+        mime: opts.mime,
+        buffer: opts.buffer,
+        sourceUrl: opts.sourceUrl,
+        sourceFileId: opts.sourceFileId,
+        sourceModifiedAt: modified,
+        path: opts.path ?? opts.fileName,
+      });
+      if (result.action === "imported") filesImported += 1;
+      else if (result.action === "preview") filesPreview += 1;
+      else filesFailed += 1;
+    } catch (err) {
+      filesFailed += 1;
+      result = {
+        fileName: opts.fileName,
+        path: opts.path ?? opts.fileName,
+        action: "failed",
+        reason: err instanceof Error ? err.message : "ingest_failed",
+      };
+    }
+  }
+  actions.push(result);
+  await prisma.driveSyncRun.update({
+    where: { id: runId },
+    data: {
+      filesSeen,
+      filesImported,
+      filesSkipped,
+      filesPreview,
+      filesFailed,
+      summaryJson: actions as unknown as Prisma.InputJsonValue,
+    },
+  });
+  return { runId, ...result };
+}
+
+export async function finishPushIngest(runId: string, config: AppConfig) {
+  const run = await prisma.driveSyncRun.findUnique({ where: { id: runId } });
+  if (!run) throw Object.assign(new Error("Sync run not found"), { statusCode: 404 });
+  const status =
+    run.filesFailed > 0 && run.filesImported === 0 && run.filesPreview === 0
+      ? "FAILED"
+      : run.filesFailed > 0
+        ? "PARTIAL"
+        : "SUCCESS";
+  const updated = await prisma.driveSyncRun.update({
+    where: { id: runId },
+    data: { status, finishedAt: new Date() },
+  });
+  await prisma.driveConnection.upsert({
+    where: { id: "default" },
+    update: { lastSyncAt: new Date(), lastError: null },
+    create: { id: "default", folderId: config.GOOGLE_DRIVE_FOLDER_ID, lastSyncAt: new Date() },
+  });
+  return updated;
+}
+
+async function importDriveBuffer(opts: {
+  fileName: string;
+  mime: string;
+  buffer: Buffer;
+  sourceUrl?: string;
+  sourceFileId?: string;
+  sourceModifiedAt?: Date;
+  path: string;
+}): Promise<FileAction> {
+  const userId = await actorUserId();
+  const job = await createPreview({
+    userId,
+    fileName: opts.fileName,
+    mime: opts.mime,
+    buffer: opts.buffer,
+    sourceUrl: opts.sourceUrl,
+    sourceFileId: opts.sourceFileId,
+    sourceModifiedAt: opts.sourceModifiedAt,
+  });
+  const preview = job.previewJson as {
+    counts?: { total?: number };
+    parsed?: { defects?: unknown[] };
+  };
+  const auto = shouldAutoCommit({
+    fileName: opts.fileName,
+    duplicateCount: job.duplicates.length,
+    total: preview.counts?.total ?? 0,
+    defectCount: preview.parsed?.defects?.length ?? 0,
+  });
+  if (auto) {
+    const committed = await commitImport(job.id, userId, false);
+    return {
+      fileName: opts.fileName,
+      path: opts.path,
+      action: "imported",
+      reason: "new_or_updated",
+      jobId: job.id,
+      runId: committed.runId,
+    };
+  }
+  return {
+    fileName: opts.fileName,
+    path: opts.path,
+    action: "preview",
+    reason: job.duplicates.length > 0 ? "duplicates_require_review" : "no_structured_results_or_copy",
+    jobId: job.id,
   };
 }
 
@@ -120,7 +283,6 @@ async function executeDriveSync(config: AppConfig, runId: string) {
 
   try {
     const { drive, folderId } = await getDrive(config);
-    const userId = await actorUserId();
     const listed = await listDriveTree(drive, folderId);
     listed.sort((a, b) => b.modifiedTime.getTime() - a.modifiedTime.getTime());
     filesSeen = listed.length;
@@ -165,49 +327,18 @@ async function executeDriveSync(config: AppConfig, runId: string) {
       processed += 1;
       try {
         const downloaded = await downloadDriveFile(drive, file);
-        const job = await createPreview({
-          userId,
+        const result = await importDriveBuffer({
           fileName: downloaded.fileName,
           mime: downloaded.mime,
           buffer: downloaded.buffer,
           sourceUrl: file.webViewLink ?? `https://drive.google.com/file/d/${file.id}/view`,
           sourceFileId: file.id,
           sourceModifiedAt: file.modifiedTime,
+          path: file.path,
         });
-        const preview = job.previewJson as {
-          counts?: { total?: number };
-          parsed?: { defects?: unknown[] };
-        };
-        const auto = shouldAutoCommit({
-          fileName: downloaded.fileName,
-          duplicateCount: job.duplicates.length,
-          total: preview.counts?.total ?? 0,
-          defectCount: preview.parsed?.defects?.length ?? 0,
-        });
-        if (auto) {
-          const committed = await commitImport(job.id, userId, false);
-          filesImported += 1;
-          actions.push({
-            fileName: downloaded.fileName,
-            path: file.path,
-            action: "imported",
-            reason: "new_or_updated",
-            jobId: job.id,
-            runId: committed.runId,
-          });
-        } else {
-          filesPreview += 1;
-          actions.push({
-            fileName: downloaded.fileName,
-            path: file.path,
-            action: "preview",
-            reason:
-              job.duplicates.length > 0
-                ? "duplicates_require_review"
-                : "no_structured_results_or_copy",
-            jobId: job.id,
-          });
-        }
+        if (result.action === "imported") filesImported += 1;
+        else filesPreview += 1;
+        actions.push(result);
       } catch (err) {
         filesFailed += 1;
         actions.push({

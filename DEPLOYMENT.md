@@ -112,6 +112,8 @@ The daily job runs inside the Railway API (`node-cron` at 06:00 America/Bogota).
 
 Unattended alternatives (Railway only): `GOOGLE_REFRESH_TOKEN` or `GOOGLE_SERVICE_ACCOUNT_JSON` (share the folder with the service account email).
 
+If Workspace blocks creating Google Cloud projects, use **Google Apps Script** instead (`scripts/drive-sync.gs`): it runs as your Google user, lists the QA folder, and POSTs new files to `/api/v1/integrations/google/ingest` with `CRON_SECRET`. Set the script timezone to America/Bogota and a daily trigger at 6:00.
+
 ## Health
 
 `GET /health` returns `{ status, version, database }`. Railway and uptime checks should use this path.

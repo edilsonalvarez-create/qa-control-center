@@ -39,6 +39,7 @@ type DriveStatus = {
     filesFailed: number;
   }>;
   schedule: { cron: string; timezone: string; enabled: boolean };
+  pushIngestEnabled: boolean;
 };
 
 export function DriveSyncPanel({ compact = false }: { compact?: boolean }) {
@@ -106,11 +107,12 @@ export function DriveSyncPanel({ compact = false }: { compact?: boolean }) {
         <div>
           <h3 className="font-semibold">{compact ? "Sincronización Drive" : "Google Drive"}</h3>
           <p className="text-sm text-slate-500">
-            Todos los días a las 6:00 (Colombia) el API revisa{" "}
+            Mientras Google Cloud no permita crear un proyecto OAuth, el camino que sí funciona es un{" "}
+            <strong>Google Apps Script</strong> con tu usuario Sumimedical: cada día a las 6:00 lee{" "}
             <a className="text-cyan-700" href={status.folderUrl} target="_blank" rel="noreferrer">
               pruebas qa
             </a>{" "}
-            y actualiza dashboard, test runs, casos y defectos. Duplicados y copias quedan en vista previa.
+            y empuja archivos nuevos al API. Duplicados y copias quedan en vista previa.
           </p>
         </div>
         <div className="flex gap-2">
@@ -162,10 +164,31 @@ export function DriveSyncPanel({ compact = false }: { compact?: boolean }) {
         )}
       </div>
       {!status.oauthConfigured && !status.connected && (
-        <p className="rounded-xl border border-amber-400/50 bg-amber-50 p-3 text-sm dark:bg-amber-950/40">
-          Falta configurar OAuth en Railway (`GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`,
-          `GOOGLE_REDIRECT_URI`, `FRONTEND_URL`). Nunca se pide la contraseña de Google.
-        </p>
+        <div className="rounded-xl border border-amber-400/50 bg-amber-50 p-3 text-sm dark:bg-amber-950/40 space-y-2">
+          <p>
+            OAuth de Google Cloud sigue bloqueado (no hay proyecto). Usa el script en{" "}
+            <code className="text-xs">scripts/drive-sync.gs</code>:
+          </p>
+          <ol className="list-decimal pl-5 space-y-1">
+            <li>
+              Abre{" "}
+              <a className="text-cyan-700" href="https://script.google.com" target="_blank" rel="noreferrer">
+                script.google.com
+              </a>{" "}
+              → proyecto nuevo → pega el script.
+            </li>
+            <li>
+              Propiedades: <code>API_URL</code> = API de Railway, <code>CRON_SECRET</code> igual que en Railway,{" "}
+              <code>FOLDER_ID</code> = la carpeta QA.
+            </li>
+            <li>Ejecuta <code>syncDriveOnce</code> una vez y acepta permisos (Drive + conexión externa).</li>
+            <li>Trigger diario 6:00, zona America/Bogota.</li>
+          </ol>
+          <p>
+            Empuje al API:{" "}
+            <strong>{status.pushIngestEnabled ? "CRON_SECRET configurado" : "falta CRON_SECRET en Railway"}</strong>
+          </p>
+        </div>
       )}
       {status.lastError && <p className="text-sm text-rose-500">{status.lastError}</p>}
       {error && <p className="text-sm text-rose-500">{error}</p>}
