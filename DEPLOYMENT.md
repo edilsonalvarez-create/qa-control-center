@@ -4,7 +4,7 @@
 
 | Layer | URL | Git |
 | --- | --- | --- |
-| Frontend (Vercel) | https://qa-control-center-six.vercel.app | Project `qa-control-center` — connect Git after accepting the collaborator invite |
+| Frontend (Vercel) | https://qa-control-center-ten.vercel.app | Auto-deploys from GitHub on `edilsonalvarez-create` (team CAMPUS) |
 | API (Railway) | https://api-production-f1d3.up.railway.app | Auto-deploys from `edilsonalvarez-create/qa-control-center` branch `master` |
 | Health | https://api-production-f1d3.up.railway.app/health | |
 
