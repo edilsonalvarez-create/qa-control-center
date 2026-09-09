@@ -1,0 +1,347 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  ADMIN
+  QA_MANAGER
+  QA
+  VIEWER
+}
+
+enum ProjectStatus {
+  ACTIVE
+  INACTIVE
+  ARCHIVED
+  REQUIRES_REVIEW
+}
+
+enum TestType {
+  UNIT
+  INTEGRATION
+  E2E
+  API
+  PERFORMANCE
+  SECURITY
+  FUNCTIONAL
+  RTM
+  BOUNDARY
+  REGRESSION
+  SMOKE
+  UNKNOWN
+}
+
+enum Environment {
+  DEV
+  QA
+  TEST
+  STAGING
+  PROD
+  UNKNOWN
+}
+
+enum CaseStatus {
+  PASS
+  FAIL
+  BLOCKED
+  SKIPPED
+  UNKNOWN
+  REQUIRES_REVIEW
+}
+
+enum RunStatus {
+  PASSED
+  FAILED
+  BLOCKED
+  IN_PROGRESS
+  UNKNOWN
+}
+
+enum Severity {
+  CRITICAL
+  HIGH
+  MEDIUM
+  LOW
+  UNKNOWN
+}
+
+enum DefectStatus {
+  OPEN
+  IN_PROGRESS
+  FIXED
+  READY_FOR_RETEST
+  RETEST_FAILED
+  CLOSED
+  REOPENED
+}
+
+enum EvidenceType {
+  SCREENSHOT
+  VIDEO
+  LOG
+  PDF
+  DOCX
+  EXCEL
+  JSON
+  HTML
+  OTHER
+}
+
+enum ImportJobStatus {
+  UPLOADED
+  PARSING
+  PREVIEW
+  COMMITTED
+  REJECTED
+  FAILED
+}
+
+model User {
+  id           String      @id @default(cuid())
+  email        String      @unique
+  name         String
+  passwordHash String
+  role         Role        @default(VIEWER)
+  active       Boolean     @default(true)
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+  auditLogs    AuditLog[]
+  importJobs   ImportJob[]
+}
+
+model Project {
+  id          String        @id @default(cuid())
+  name        String        @unique
+  description String?
+  client      String?
+  product     String?
+  status      ProjectStatus @default(ACTIVE)
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+  modules     Module[]
+  testRuns    TestRun[]
+  defects     Defect[]
+  releases    Release[]
+  reports     QaReport[]
+  sourceFiles SourceFile[]
+}
+
+model Module {
+  id           String        @id @default(cuid())
+  projectId    String
+  project      Project       @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  name         String
+  description  String?
+  status       String        @default("ACTIVE")
+  createdAt    DateTime      @default(now())
+  testRuns     TestRun[]
+  defects      Defect[]
+  requirements Requirement[]
+
+  @@unique([projectId, name])
+}
+
+model Requirement {
+  id          String     @id @default(cuid())
+  moduleId    String
+  module      Module     @relation(fields: [moduleId], references: [id], onDelete: Cascade)
+  title       String
+  description String?
+  status      String     @default("Unknown")
+  testCases   TestCase[]
+}
+
+model TestRun {
+  id            String      @id @default(cuid())
+  projectId     String
+  project       Project     @relation(fields: [projectId], references: [id])
+  moduleId      String?
+  module        Module?     @relation(fields: [moduleId], references: [id])
+  testType      TestType    @default(UNKNOWN)
+  environment   Environment @default(UNKNOWN)
+  executionDate DateTime
+  tester        String?
+  version       String?
+  commit        String?
+  totalTests    Int         @default(0)
+  passed        Int         @default(0)
+  failed        Int         @default(0)
+  blocked       Int         @default(0)
+  skipped       Int         @default(0)
+  durationSec   Int?
+  status        RunStatus   @default(UNKNOWN)
+  observations  String?
+  fingerprint   String?
+  sourceFileId  String?
+  sourceFile    SourceFile? @relation(fields: [sourceFileId], references: [id])
+  createdAt     DateTime    @default(now())
+  testCases     TestCase[]
+  defects       Defect[]
+  evidence      Evidence[]
+
+  @@index([projectId, executionDate])
+  @@index([fingerprint])
+}
+
+model TestCase {
+  id            String        @id @default(cuid())
+  testRunId     String
+  testRun       TestRun       @relation(fields: [testRunId], references: [id], onDelete: Cascade)
+  requirementId String?
+  requirement   Requirement?  @relation(fields: [requirementId], references: [id])
+  externalId    String?
+  title         String
+  description   String?
+  type          TestType      @default(UNKNOWN)
+  priority      String?
+  status        CaseStatus    @default(UNKNOWN)
+  executionDate DateTime?
+  fingerprint   String?
+  defects       Defect[]
+  evidence      Evidence[]
+
+  @@index([fingerprint])
+}
+
+model Defect {
+  id            String       @id @default(cuid())
+  testCaseId    String?
+  testCase      TestCase?    @relation(fields: [testCaseId], references: [id])
+  testRunId     String?
+  testRun       TestRun?     @relation(fields: [testRunId], references: [id])
+  projectId     String
+  project       Project      @relation(fields: [projectId], references: [id])
+  moduleId      String?
+  module        Module?      @relation(fields: [moduleId], references: [id])
+  title         String
+  description   String?
+  severity      Severity     @default(UNKNOWN)
+  priority      String?
+  status        DefectStatus @default(OPEN)
+  assignedTo    String?
+  detectedDate  DateTime?
+  resolvedDate  DateTime?
+  resolution    String?
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+  evidence      Evidence[]
+}
+
+model Evidence {
+  id          String       @id @default(cuid())
+  testRunId   String?
+  testRun     TestRun?     @relation(fields: [testRunId], references: [id])
+  testCaseId  String?
+  testCase    TestCase?    @relation(fields: [testCaseId], references: [id])
+  defectId    String?
+  defect      Defect?      @relation(fields: [defectId], references: [id])
+  sourceFileId String?
+  sourceFile  SourceFile?  @relation(fields: [sourceFileId], references: [id])
+  type        EvidenceType @default(OTHER)
+  fileName    String
+  fileUrl     String?
+  description String?
+  createdAt   DateTime     @default(now())
+}
+
+model Release {
+  id          String      @id @default(cuid())
+  projectId   String
+  project     Project     @relation(fields: [projectId], references: [id])
+  version     String
+  commit      String?
+  releaseDate DateTime?
+  environment Environment @default(UNKNOWN)
+  health      String      @default("Unknown")
+  notes       String?
+}
+
+model QaReport {
+  id          String   @id @default(cuid())
+  projectId   String?
+  project     Project? @relation(fields: [projectId], references: [id])
+  reportDate  DateTime
+  reportType  String
+  fileName    String
+  sourceUrl   String?
+  summary     String?
+  sourceFileId String?
+  sourceFile  SourceFile? @relation(fields: [sourceFileId], references: [id])
+}
+
+model SourceFile {
+  id             String     @id @default(cuid())
+  projectId      String?
+  project        Project?   @relation(fields: [projectId], references: [id])
+  fileName       String
+  mimeType       String?
+  sourceUrl      String?
+  sourceFileId   String?
+  sourceModifiedAt DateTime?
+  contentHash    String?
+  sizeBytes      Int?
+  createdAt      DateTime   @default(now())
+  testRuns       TestRun[]
+  evidence       Evidence[]
+  reports        QaReport[]
+  importJobs     ImportJob[]
+
+  @@index([contentHash])
+  @@index([sourceFileId])
+}
+
+model ImportJob {
+  id             String          @id @default(cuid())
+  userId         String
+  user           User            @relation(fields: [userId], references: [id])
+  sourceFileId   String?
+  sourceFile     SourceFile?     @relation(fields: [sourceFileId], references: [id])
+  status         ImportJobStatus @default(UPLOADED)
+  previewJson    Json?
+  warnings       Json?
+  errorMessage   String?
+  createdAt      DateTime        @default(now())
+  committedAt    DateTime?
+  duplicates     DuplicateCandidate[]
+  conflicts      DataConflict[]
+}
+
+model DuplicateCandidate {
+  id           String    @id @default(cuid())
+  importJobId  String
+  importJob    ImportJob @relation(fields: [importJobId], references: [id], onDelete: Cascade)
+  fingerprint  String
+  reason       String
+  existingId   String?
+  existingType String?
+  suggested    String    @default("REVIEW")
+}
+
+model DataConflict {
+  id          String    @id @default(cuid())
+  importJobId String?
+  importJob   ImportJob? @relation(fields: [importJobId], references: [id])
+  field       String
+  leftValue   String
+  rightValue  String
+  leftSource  String?
+  rightSource String?
+  status      String    @default("Requires review")
+  createdAt   DateTime  @default(now())
+}
+
+model AuditLog {
+  id         String   @id @default(cuid())
+  userId     String?
+  user       User?    @relation(fields: [userId], references: [id])
+  action     String
+  entity     String
+  entityId   String?
+  payload    Json?
+  createdAt  DateTime @default(now())
+}

@@ -1,0 +1,26 @@
+{
+  "name": "qa-control-center",
+  "private": true,
+  "version": "1.0.0",
+  "description": "QA Control Center — consolidates QA matrices, evidence, defects and reports",
+  "workspaces": [
+    "apps/api",
+    "apps/web",
+    "packages/shared"
+  ],
+  "scripts": {
+    "dev": "npx concurrently -n api,web -c cyan,magenta \"npm run dev:api\" \"npm run dev:web\"",
+    "dev:api": "npm run dev --workspace=@qacc/api",
+    "dev:web": "npm run dev --workspace=@qacc/web",
+    "build": "npm run build --workspace=@qacc/shared && npm run build --workspace=@qacc/api && npm run build --workspace=@qacc/web",
+    "test": "npm run test --workspace=@qacc/api",
+    "lint": "npm run lint --workspace=@qacc/api && npm run lint --workspace=@qacc/web",
+    "db:generate": "npm run prisma:generate --workspace=@qacc/api",
+    "db:migrate": "npm run prisma:migrate --workspace=@qacc/api",
+    "db:seed": "npm run prisma:seed --workspace=@qacc/api",
+    "db:push": "npm run prisma:push --workspace=@qacc/api"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

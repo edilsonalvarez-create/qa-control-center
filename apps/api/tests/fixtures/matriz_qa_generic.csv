@@ -1,0 +1,3 @@
+ID,Caso de prueba,Módulo,Resultado,Fecha,QA
+FIX-001,FIXTURE caso pasa,Login,PASS,2026-08-01,Fixture Tester
+FIX-002,FIXTURE caso falla,Login,FAIL,2026-08-01,Fixture Tester
