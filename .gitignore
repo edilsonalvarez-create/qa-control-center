@@ -24,3 +24,6 @@ DEMO DATA/
 .prisma/
 apps/api/prisma/*.db
 apps/api/prisma/*.db-journal
+.env*
+!.env.example
+.vercel

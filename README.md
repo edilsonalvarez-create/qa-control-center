@@ -1,5 +1,12 @@
 # QA Control Center
 
+**Live**
+
+- App: https://qa-control-center-six.vercel.app
+- API: https://api-production-f1d3.up.railway.app
+- Health: https://api-production-f1d3.up.railway.app/health
+- Repo: https://github.com/edilsonalvarez-create/qa-control-center
+
 Enterprise console for **what QA tested, when, with what result, which defects remain open, and which original evidence supports each finding**.
 
 This repository is **not** QA Guardian (the diagnostic engine in `Andres`). It is a new product.

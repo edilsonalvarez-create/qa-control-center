@@ -1,5 +1,17 @@
 # Deployment
 
+## Live (production)
+
+| Layer | URL | Git |
+| --- | --- | --- |
+| Frontend (Vercel) | https://qa-control-center-six.vercel.app | Project `qa-control-center` — connect Git after accepting the collaborator invite |
+| API (Railway) | https://api-production-f1d3.up.railway.app | Auto-deploys from `edilsonalvarez-create/qa-control-center` branch `master` |
+| Health | https://api-production-f1d3.up.railway.app/health | |
+
+Login (seed admin): `admin@qacc.local` / `ChangeMeNow!` — change immediately.
+
+GitHub repo: https://github.com/edilsonalvarez-create/qa-control-center
+
 ## Topology
 
 ```
