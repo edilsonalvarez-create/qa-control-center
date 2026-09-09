@@ -24,10 +24,31 @@ function runWhere(f: FilterQuery): Prisma.TestRunWhereInput {
   };
 }
 
+function emptyCaseMix() {
+  return { passed: 0, failed: 0, blocked: 0, skipped: 0, unknown: 0, review: 0, total: 0 };
+}
+
+function addCaseStatus(
+  acc: ReturnType<typeof emptyCaseMix>,
+  status: CaseStatus,
+  n = 1,
+) {
+  acc.total += n;
+  if (status === CaseStatus.PASS) acc.passed += n;
+  else if (status === CaseStatus.FAIL) acc.failed += n;
+  else if (status === CaseStatus.BLOCKED) acc.blocked += n;
+  else if (status === CaseStatus.SKIPPED) acc.skipped += n;
+  else if (status === CaseStatus.REQUIRES_REVIEW) acc.review += n;
+  else acc.unknown += n;
+}
+
 export async function getDashboard(f: FilterQuery) {
   const where = runWhere(f);
-  const runs = await prisma.testRun.findMany({ where });
-  const totals = runs.reduce(
+  const runs = await prisma.testRun.findMany({
+    where,
+    include: { testCases: { select: { status: true } } },
+  });
+  const runTotals = runs.reduce(
     (acc, r) => {
       acc.totalTests += r.totalTests;
       acc.passed += r.passed;
@@ -39,6 +60,21 @@ export async function getDashboard(f: FilterQuery) {
     },
     { totalTests: 0, passed: 0, failed: 0, blocked: 0, skipped: 0, runs: 0 },
   );
+  const fromEstado = emptyCaseMix();
+  for (const r of runs) {
+    for (const c of r.testCases) addCaseStatus(fromEstado, c.status);
+  }
+  const useEstado = fromEstado.total > 0;
+  const totals = {
+    totalTests: useEstado ? fromEstado.total : runTotals.totalTests,
+    passed: useEstado ? fromEstado.passed : runTotals.passed,
+    failed: useEstado ? fromEstado.failed : runTotals.failed,
+    blocked: useEstado ? fromEstado.blocked : runTotals.blocked,
+    skipped: useEstado ? fromEstado.skipped : runTotals.skipped,
+    unknown: useEstado ? fromEstado.unknown : 0,
+    review: useEstado ? fromEstado.review : 0,
+    runs: runTotals.runs,
+  };
 
   const defectWhere: Prisma.DefectWhereInput = {
     projectId: f.projectId || undefined,
@@ -62,36 +98,62 @@ export async function getDashboard(f: FilterQuery) {
   });
   const tested = modules.filter((m) => m.testRuns.length > 0).length;
   const coveragePct = modules.length ? Math.round((tested / modules.length) * 100) : 0;
-  const successPct = totals.totalTests
-    ? Math.round((totals.passed / totals.totalTests) * 100)
-    : null;
+  const decided = totals.passed + totals.failed + totals.blocked;
+  const successPct = decided ? Math.round((totals.passed / decided) * 100) : null;
 
-  const byDayMap = new Map<string, { date: string; passed: number; failed: number; blocked: number; skipped: number }>();
+  const byDayMap = new Map<
+    string,
+    { date: string; passed: number; failed: number; blocked: number; skipped: number; unknown: number }
+  >();
   for (const r of runs) {
     const key = r.executionDate.toISOString().slice(0, 10);
-    const cur = byDayMap.get(key) ?? { date: key, passed: 0, failed: 0, blocked: 0, skipped: 0 };
-    cur.passed += r.passed;
-    cur.failed += r.failed;
-    cur.blocked += r.blocked;
-    cur.skipped += r.skipped;
+    const cur = byDayMap.get(key) ?? { date: key, passed: 0, failed: 0, blocked: 0, skipped: 0, unknown: 0 };
+    if (r.testCases.length) {
+      for (const c of r.testCases) {
+        if (c.status === CaseStatus.PASS) cur.passed += 1;
+        else if (c.status === CaseStatus.FAIL) cur.failed += 1;
+        else if (c.status === CaseStatus.BLOCKED) cur.blocked += 1;
+        else if (c.status === CaseStatus.SKIPPED) cur.skipped += 1;
+        else cur.unknown += 1;
+      }
+    } else {
+      cur.passed += r.passed;
+      cur.failed += r.failed;
+      cur.blocked += r.blocked;
+      cur.skipped += r.skipped;
+    }
     byDayMap.set(key, cur);
   }
 
   const projects = await prisma.project.findMany({
-    include: { testRuns: true, defects: true },
+    include: { testRuns: { include: { testCases: { select: { status: true } } } }, defects: true },
   });
 
-  const byProject = projects.map((p) => ({
-    id: p.id,
-    name: p.name,
-    status: p.status,
-    product: p.product,
-    totalTests: p.testRuns.reduce((s, r) => s + r.totalTests, 0),
-    passed: p.testRuns.reduce((s, r) => s + r.passed, 0),
-    failed: p.testRuns.reduce((s, r) => s + r.failed, 0),
-    blocked: p.testRuns.reduce((s, r) => s + r.blocked, 0),
-    openDefects: p.defects.filter((d) => d.status !== DefectStatus.CLOSED).length,
-  }));
+  const byProject = projects.map((p) => {
+    const mix = emptyCaseMix();
+    for (const r of p.testRuns) {
+      if (r.testCases.length) {
+        for (const c of r.testCases) addCaseStatus(mix, c.status);
+      } else {
+        mix.total += r.totalTests;
+        mix.passed += r.passed;
+        mix.failed += r.failed;
+        mix.blocked += r.blocked;
+        mix.skipped += r.skipped;
+      }
+    }
+    return {
+      id: p.id,
+      name: p.name,
+      status: p.status,
+      product: p.product,
+      totalTests: mix.total,
+      passed: mix.passed,
+      failed: mix.failed,
+      blocked: mix.blocked,
+      openDefects: p.defects.filter((d) => d.status !== DefectStatus.CLOSED).length,
+    };
+  });
 
   const severityCounts = {
     CRITICAL: defects.filter((d) => d.severity === "CRITICAL").length,
@@ -110,6 +172,8 @@ export async function getDashboard(f: FilterQuery) {
       failed: totals.failed,
       blocked: totals.blocked,
       skipped: totals.skipped,
+      unknown: totals.unknown,
+      review: totals.review,
       defectsFound: defects.length,
       defectsOpen: open.length,
       defectsCritical: critical.length,
@@ -123,6 +187,8 @@ export async function getDashboard(f: FilterQuery) {
       FAIL: totals.failed,
       BLOCKED: totals.blocked,
       SKIPPED: totals.skipped,
+      UNKNOWN: totals.unknown,
+      REQUIRES_REVIEW: totals.review,
     },
     byProject,
     severityCounts,

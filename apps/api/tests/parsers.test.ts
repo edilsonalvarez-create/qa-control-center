@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
+import ExcelJS from "exceljs";
 import { mapHeader } from "../src/parsers/columns.js";
 import { parseCsv } from "../src/parsers/csv.js";
+import { parseExcel } from "../src/parsers/excel.js";
 import {
   extractNarrativeMetrics,
   fingerprint,
@@ -13,6 +15,9 @@ describe("header detection", () => {
     expect(mapHeader("ID").role).toBe("externalId");
     expect(mapHeader("Caso de prueba").role).toBe("title");
     expect(mapHeader("Resultado").role).toBe("status");
+    expect(mapHeader("Estado").role).toBe("status");
+    expect(mapHeader("//Estado//").role).toBe("status");
+    expect(mapHeader("Estado de la prueba").role).toBe("status");
     expect(mapHeader("Módulo").role).toBe("module");
     expect(mapHeader("Fecha ejecución").role).toBe("date");
     expect(mapHeader("Responsable").role).toBe("tester");
@@ -26,7 +31,11 @@ describe("header detection", () => {
 describe("status and metrics", () => {
   it("maps pass/fail synonyms without guessing empty as PASS", () => {
     expect(mapStatus("Passed")).toBe("PASS");
+    expect(mapStatus("Exitoso")).toBe("PASS");
     expect(mapStatus("Fallido")).toBe("FAIL");
+    expect(mapStatus("No cumple")).toBe("FAIL");
+    expect(mapStatus("Pendiente")).toBe("UNKNOWN");
+    expect(mapStatus("No ejecutado")).toBe("UNKNOWN");
     expect(mapStatus("")).toBe("UNKNOWN");
     expect(mapStatus("maybe later")).toBe("REQUIRES_REVIEW");
   });
@@ -58,6 +67,33 @@ FIX-002,FIXTURE login inválido,Login,FAIL,2026-08-01`;
     expect(result.cases[1].status).toBe("FAIL");
     expect(result.defects).toHaveLength(1);
     expect(result.detectedModule).toBe("Login FIXTURE");
+  });
+
+  it("feeds dashboard status from Estado when Resultado esperado is also present", () => {
+    const csv = `ID,Caso de prueba,Resultado esperado,Estado,Módulo
+FIX-010,FIXTURE abre orden,Debe mostrar la orden,Exitoso,Ordenes
+FIX-011,FIXTURE guarda orden,Debe persistir,Fallido,Ordenes
+FIX-012,FIXTURE anula orden,Debe anular,Pendiente,Ordenes`;
+    const result = parseCsv(csv, "Matriz_QA_Ordenes_FIXTURE.csv");
+    expect(result.cases.map((c) => c.status)).toEqual(["PASS", "FAIL", "UNKNOWN"]);
+    expect(result.cases[0].expected).toBe("Debe mostrar la orden");
+  });
+});
+
+describe("excel parser", () => {
+  it("reads Estado from a later sheet when the first sheet is a cover", async () => {
+    const wb = new ExcelJS.Workbook();
+    wb.addWorksheet("Portada").addRow(["Informe QA", "SUMIMEDICAL"]);
+    const sheet = wb.addWorksheet("Matriz");
+    sheet.addRow(["ID", "Caso de prueba", "Resultado esperado", "Estado"]);
+    sheet.addRow(["C-1", "FIXTURE login", "Ingresa al sistema", "Exitoso"]);
+    sheet.addRow(["C-2", "FIXTURE logout", "Cierra sesión", "Fallido"]);
+    const buffer = Buffer.from(await wb.xlsx.writeBuffer());
+    const result = await parseExcel(buffer, "Matriz_QA_Login_FIXTURE.xlsx");
+    expect(result.cases).toHaveLength(2);
+    expect(result.cases[0].status).toBe("PASS");
+    expect(result.cases[1].status).toBe("FAIL");
+    expect(result.warnings.some((w) => w.code === "SHEET_SELECTED")).toBe(true);
   });
 });
 

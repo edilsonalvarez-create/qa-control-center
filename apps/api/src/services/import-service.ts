@@ -227,8 +227,15 @@ export async function commitImport(jobId: string, userId: string, force = false)
   const counts = preview.counts;
   const failed = counts.failed ?? 0;
   const blocked = counts.blocked ?? 0;
+  const passed = counts.passed ?? 0;
   const status: RunStatus =
-    failed > 0 ? RunStatus.FAILED : blocked > 0 ? RunStatus.BLOCKED : counts.total > 0 ? RunStatus.PASSED : RunStatus.UNKNOWN;
+    failed > 0
+      ? RunStatus.FAILED
+      : blocked > 0
+        ? RunStatus.BLOCKED
+        : passed > 0
+          ? RunStatus.PASSED
+          : RunStatus.UNKNOWN;
 
   const execDate = parsed.detectedDate ? new Date(parsed.detectedDate) : new Date();
 

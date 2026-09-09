@@ -1,4 +1,4 @@
-import type { ColumnRole } from "./types.js";
+import type { ColumnRole, HeaderMapping } from "./types.js";
 
 const SYNONYMS: Record<ColumnRole, string[]> = {
   externalId: ["id", "codigo", "código", "code", "case id", "tc", "caso id", "nro", "no.", "#"],
@@ -17,14 +17,19 @@ const SYNONYMS: Record<ColumnRole, string[]> = {
   description: ["descripcion", "descripción", "description", "detalle", "precondicion", "precondición"],
   status: [
     "estado",
-    "resultado",
-    "result",
+    "estado del caso",
+    "estado de la prueba",
+    "estado de ejecucion",
+    "estado del test",
+    "estado test",
     "status",
     "pass/fail",
     "pass fail",
+    "outcome",
+    "resultado",
+    "result",
     "ejecucion",
     "ejecución",
-    "outcome",
   ],
   module: ["modulo", "módulo", "module", "funcionalidad", "componente", "feature"],
   project: ["proyecto", "project", "cliente", "client", "aplicacion", "aplicación"],
@@ -55,6 +60,7 @@ function norm(s: string) {
 export function mapHeader(header: string): { role: ColumnRole; confidence: number } {
   const n = norm(header);
   if (!n) return { role: "ignore", confidence: 0 };
+  if (n === "estado" || n.startsWith("estado ")) return { role: "status", confidence: 1 };
   let best: { role: ColumnRole; confidence: number } = { role: "ignore", confidence: 0 };
   for (const [role, list] of Object.entries(SYNONYMS) as [ColumnRole, string[]][]) {
     if (role === "ignore") continue;
@@ -68,6 +74,30 @@ export function mapHeader(header: string): { role: ColumnRole; confidence: numbe
     }
   }
   return best.confidence >= 0.45 ? best : { role: "ignore", confidence: 0 };
+}
+
+function statusColumnScore(header: string): number {
+  const n = norm(header);
+  if (n === "estado" || n.startsWith("estado ")) return 100;
+  if (n === "status") return 90;
+  if (n.includes("pass") && n.includes("fail")) return 80;
+  if (n === "outcome") return 70;
+  if (n === "resultado" || n === "result") return 20;
+  if (n.includes("ejecucion")) return 15;
+  return 50;
+}
+
+export function pickHeader(headers: HeaderMapping[], role: ColumnRole): HeaderMapping | undefined {
+  const matches = headers.filter((h) => h.role === role);
+  if (!matches.length) return undefined;
+  if (role !== "status" || matches.length === 1) return matches[0];
+  return [...matches].sort((a, b) => statusColumnScore(b.header) - statusColumnScore(a.header) || a.index - b.index)[0];
+}
+
+export function mappedCell(headers: HeaderMapping[], row: string[], role: ColumnRole): string {
+  const h = pickHeader(headers, role);
+  if (!h) return "";
+  return (row[h.index] ?? "").replace(/\s+/g, " ").trim();
 }
 
 export function isLikelyHeaderRow(cells: string[]): boolean {

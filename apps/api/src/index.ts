@@ -32,6 +32,10 @@ async function build() {
   await app.register(jwt, { secret: config.JWT_SECRET, sign: { expiresIn: config.JWT_EXPIRES_IN } });
   await app.register(rateLimit, { max: config.RATE_LIMIT_MAX, timeWindow: "1 minute" });
   await app.register(multipart, { limits: { fileSize: 25 * 1024 * 1024 } });
+  // Apps Script UrlFetchApp POSTs without a payload default to urlencoded; ingest/begin has no body.
+  app.addContentTypeParser("application/x-www-form-urlencoded", { parseAs: "string" }, (_request, body, done) => {
+    done(null, body || "");
+  });
 
   app.decorate("authenticate", authenticate);
   app.decorate("requireQa", authorize("ADMIN", "QA_MANAGER", "QA"));

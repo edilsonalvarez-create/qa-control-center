@@ -74,7 +74,9 @@ function syncDriveOnce() {
   var headers = { Authorization: "Bearer " + secret };
   var begin = UrlFetchApp.fetch(apiUrl + "/api/v1/integrations/google/ingest/begin", {
     method: "post",
+    contentType: "application/json",
     headers: headers,
+    payload: "{}",
     muteHttpExceptions: true,
   });
   if (begin.getResponseCode() >= 300) {

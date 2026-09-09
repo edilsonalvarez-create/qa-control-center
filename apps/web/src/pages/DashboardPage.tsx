@@ -7,7 +7,7 @@ import { EmptyState } from "../components/EmptyState";
 type Dash = {
   empty: boolean;
   kpis: Record<string, number | null>;
-  byDay: Array<{ date: string; passed: number; failed: number; blocked: number; skipped: number }>;
+  byDay: Array<{ date: string; passed: number; failed: number; blocked: number; skipped: number; unknown?: number }>;
   resultMix: Record<string, number>;
   byProject: Array<{ id: string; name: string; totalTests: number; passed: number; failed: number; openDefects: number; status: string }>;
   severityCounts: Record<string, number>;
@@ -20,6 +20,8 @@ const KPI: Array<[string, string]> = [
   ["failed", "FAIL"],
   ["blocked", "BLOCKED"],
   ["skipped", "SKIPPED"],
+  ["unknown", "Sin Estado"],
+  ["review", "Por revisar"],
   ["defectsFound", "Defectos"],
   ["defectsOpen", "Abiertos"],
   ["defectsCritical", "Críticos"],
@@ -45,20 +47,22 @@ export function DashboardPage() {
     return (
       <EmptyState
         title="Aún no hay ejecuciones importadas"
-        hint="El catálogo de proyectos y módulos sí existe (descubrimiento Drive). Importa una Matriz_QA_*.xlsx real desde Import Center para ver KPIs. No se muestran ceros de éxito inventados."
+        hint="El catálogo de proyectos y módulos sí existe (descubrimiento Drive). Importa una Matriz_QA_*.xlsx real desde Import Center para ver KPIs tomados del campo Estado. No se muestran ceros de éxito inventados."
       />
     );
   }
 
-  const mix = Object.entries(data.resultMix).map(([name, value]) => ({ name, value }));
-  const colors = ["#10b981", "#f43f5e", "#f59e0b", "#64748b"];
+  const mix = Object.entries(data.resultMix)
+    .filter(([, value]) => value > 0)
+    .map(([name, value]) => ({ name, value }));
+  const colors = ["#10b981", "#f43f5e", "#f59e0b", "#64748b", "#94a3b8", "#8b5cf6"];
   const sev = Object.entries(data.severityCounts).map(([name, value]) => ({ name, value }));
 
   return (
     <div className="space-y-6">
       <div>
         <h2 className="text-2xl font-bold">Overview</h2>
-        <p className="text-sm text-slate-500">Estado actual de QA — datos importados únicamente.</p>
+        <p className="text-sm text-slate-500">Estado actual de QA — KPIs tomados del campo Estado de cada caso en las matrices importadas.</p>
       </div>
       <div className="grid grid-cols-2 gap-3 md:grid-cols-4 xl:grid-cols-6">
         {KPI.map(([k, label]) => (
@@ -81,11 +85,12 @@ export function DashboardPage() {
               <Bar dataKey="failed" stackId="a" fill="#f43f5e" />
               <Bar dataKey="blocked" stackId="a" fill="#f59e0b" />
               <Bar dataKey="skipped" stackId="a" fill="#64748b" />
+              <Bar dataKey="unknown" stackId="a" fill="#94a3b8" />
             </BarChart>
           </ResponsiveContainer>
         </div>
         <div className="card h-80">
-          <p className="mb-2 text-sm font-semibold">PASS vs FAIL vs BLOCKED vs SKIPPED</p>
+          <p className="mb-2 text-sm font-semibold">Distribución por Estado</p>
           <ResponsiveContainer width="100%" height="90%">
             <PieChart>
               <Pie data={mix} dataKey="value" nameKey="name" outerRadius={90} label>

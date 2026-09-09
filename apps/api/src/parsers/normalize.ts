@@ -22,10 +22,21 @@ export function fingerprint(parts: Array<string | undefined>): string {
 export function mapStatus(raw: string | undefined): string {
   const n = normalizeKey(raw ?? "");
   if (!n) return "UNKNOWN";
-  if (/\b(pass|passed|ok|exitoso|aprobado|satisfactorio|p)\b/.test(n) || n === "pass") return "PASS";
-  if (/\b(fail|failed|fallo|fallido|error|no ok)\b/.test(n)) return "FAIL";
-  if (/\b(block|blocked|bloqueado)\b/.test(n)) return "BLOCKED";
-  if (/\b(skip|skipped|omitido|n\/a|na)\b/.test(n)) return "SKIPPED";
+  if (
+    /\b(no (cumple|cumplio|ok|pasa|paso|exitoso|exitosa)|fallid[oa]|fallo|failed|fail|error|reprobado|nok)\b/.test(n)
+  ) {
+    return "FAIL";
+  }
+  if (
+    /\b(pass|passed|ok|exitoso|exitosa|aprobad[oa]|satisfactori[oa]|cumple|cumplio|pasa|paso)\b/.test(n) ||
+    n === "pass" ||
+    n === "p"
+  ) {
+    return "PASS";
+  }
+  if (/\b(block|blocked|bloquead[oa])\b/.test(n)) return "BLOCKED";
+  if (/\b(skip|skipped|omitid[oa]|n a|na|no aplica)\b/.test(n)) return "SKIPPED";
+  if (/\b(pendiente|no ejecutad[oa]|por ejecutar|sin ejecutar|en progreso|en ejecucion)\b/.test(n)) return "UNKNOWN";
   return "REQUIRES_REVIEW";
 }
 
