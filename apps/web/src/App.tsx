@@ -6,6 +6,7 @@ import { DashboardPage } from "./pages/DashboardPage";
 import { ImportPage } from "./pages/ImportPage";
 import { LoginPage } from "./pages/LoginPage";
 import { RunDetailPage } from "./pages/RunDetailPage";
+import { SettingsPage } from "./pages/SettingsPage";
 import {
   CasesPage,
   CoveragePage,
@@ -15,7 +16,6 @@ import {
   ReportsPage,
   RunsPage,
   SearchPage,
-  SettingsPage,
   TimelinePage,
 } from "./pages/Lists";
 

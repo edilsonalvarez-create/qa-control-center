@@ -59,6 +59,7 @@ export async function createPreview(opts: {
   buffer: Buffer;
   sourceUrl?: string;
   sourceFileId?: string;
+  sourceModifiedAt?: Date;
 }) {
   const hash = crypto.createHash("sha256").update(opts.buffer).digest("hex");
   const parsed = await parseUpload(opts.fileName, opts.mime, opts.buffer);
@@ -69,6 +70,7 @@ export async function createPreview(opts: {
       mimeType: opts.mime,
       sourceUrl: opts.sourceUrl,
       sourceFileId: opts.sourceFileId,
+      sourceModifiedAt: opts.sourceModifiedAt,
       contentHash: hash,
       sizeBytes: opts.buffer.length,
     },

@@ -11,6 +11,8 @@ import { authenticate, authorize } from "./lib/auth.js";
 import { authRoutes } from "./routes/auth.js";
 import { domainRoutes } from "./routes/domain.js";
 import { importRoutes } from "./routes/import.js";
+import { driveRoutes } from "./routes/drive.js";
+import { startDriveSyncScheduler } from "./jobs/drive-cron.js";
 
 async function build() {
   const config = loadConfig();
@@ -34,6 +36,7 @@ async function build() {
   app.decorate("authenticate", authenticate);
   app.decorate("requireQa", authorize("ADMIN", "QA_MANAGER", "QA"));
   app.decorate("requireAdmin", authorize("ADMIN"));
+  app.decorate("requireManager", authorize("ADMIN", "QA_MANAGER"));
 
   app.get("/health", async () => {
     let database = "unknown";
@@ -49,6 +52,7 @@ async function build() {
   await app.register(authRoutes);
   await app.register(domainRoutes);
   await app.register(importRoutes);
+  await driveRoutes(app, config);
 
   app.setErrorHandler((err, _req, reply) => {
     requestLog(err);
@@ -67,7 +71,8 @@ const { app, config } = await build();
 try {
   await app.listen({ port: config.PORT, host: "0.0.0.0" });
   logger.info(`API listening on ${config.PORT}`);
-  } catch (err) {
+  startDriveSyncScheduler(config);
+} catch (err) {
   logger.error({ err }, "failed to listen");
   process.exit(1);
 }

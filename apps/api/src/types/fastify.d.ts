@@ -6,6 +6,7 @@ declare module "fastify" {
     authenticate: (request: FastifyRequest, reply: FastifyReply) => Promise<void>;
     requireQa: (request: FastifyRequest, reply: FastifyReply) => Promise<void>;
     requireAdmin: (request: FastifyRequest, reply: FastifyReply) => Promise<void>;
+    requireManager: (request: FastifyRequest, reply: FastifyReply) => Promise<void>;
   }
 }
 

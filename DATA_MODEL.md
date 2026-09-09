@@ -19,6 +19,8 @@ PostgreSQL via Prisma. Uncertain values are stored as `Unknown` or `Requires rev
 - **DuplicateCandidate** — suggested consolidation, never auto-merged
 - **DataConflict** — contradictory facts between sources
 - **AuditLog** — who changed what
+- **DriveConnection** — encrypted Google refresh token + folder id
+- **DriveSyncRun** — daily/manual sync counters (seen/imported/preview/skipped/failed)
 
 ## Defect statuses
 

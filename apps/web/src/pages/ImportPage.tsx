@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { api } from "../lib/api";
 import { StatusBadge } from "../components/StatusBadge";
+import { DriveSyncPanel } from "./SettingsPage";
 
 export function ImportPage() {
   const [jobs, setJobs] = useState<any[]>([]);
@@ -59,6 +60,7 @@ export function ImportPage() {
           Upload → Parse → Detect structure → Normalize → Validate → Duplicates → Preview → Import. Nunca se confirma solo si hay duplicados.
         </p>
       </div>
+      <DriveSyncPanel compact />
       <div className="card space-y-3">
         <label className="text-sm">URL original de Drive (opcional)</label>
         <input

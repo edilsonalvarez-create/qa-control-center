@@ -44,7 +44,11 @@ Business logic lives in API services, not React components.
 
 ## Google Drive
 
-MVP: manual upload. Each record stores `source_file_id`, `source_url`, `source_file_name`, `source_modified_at`. Phase 4: OAuth 2.0 (never a Google password in the app).
+Daily sync at 06:00 America/Bogota on the API process (`node-cron`), with an optional HTTP tick for GitHub Actions.
+
+OAuth 2.0 refresh tokens are stored encrypted (`DriveConnection`). Users never enter a Google password. The import pipeline still blocks auto-commit on duplicates and `Copia de` filenames.
+
+See [DEPLOYMENT.md](DEPLOYMENT.md).
 
 ## Deployment
 

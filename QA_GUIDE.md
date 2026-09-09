@@ -10,7 +10,7 @@ Implementation, validation, tests, error handling, and evidence it works.
 | --- | --- | --- |
 | Parser unit | `npm test` | Header detection, metric regex, fingerprints, no invented fields |
 | API | `npm test --workspace=@qacc/api` | Health, auth guards, import preview |
-| Manual | Import Center | Upload a real `Matriz_QA_*.xlsx` from Drive |
+| Manual | Import Center / Settings | Upload a real `Matriz_QA_*.xlsx`; connect Drive and run **Sincronizar ahora** |
 
 ## Parser fixtures
 

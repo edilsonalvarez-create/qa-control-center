@@ -85,9 +85,33 @@ npm run build --workspace=@qacc/api
 
 Production `CORS_ORIGINS` must be the exact Vercel origin (no trailing slash). JWT is sent as `Authorization: Bearer`.
 
-## Google Drive (later)
+## Google Drive (daily sync)
 
-Configure `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_REDIRECT_URI` only in Railway. Never commit them. Users authenticate with Google OAuth, not by pasting a password.
+The **Railway API** (not Vercel) lists and downloads Drive files. Schedule: `0 6 * * *` in `America/Bogota`.
+
+1. Google Cloud Console → APIs → enable **Google Drive API**.
+2. Credentials → OAuth client **Web application**.
+3. Authorized redirect URI (production):
+   `https://api-production-f1d3.up.railway.app/api/v1/integrations/google/callback`
+4. Railway API variables:
+
+```
+FRONTEND_URL=https://qa-control-center-ten.vercel.app
+GOOGLE_CLIENT_ID=
+GOOGLE_CLIENT_SECRET=
+GOOGLE_REDIRECT_URI=https://api-production-f1d3.up.railway.app/api/v1/integrations/google/callback
+GOOGLE_DRIVE_FOLDER_ID=1hCe3QBPraJEvt6H60KcCOiNIFzG6zdL-
+DRIVE_SYNC_CRON=0 6 * * *
+DRIVE_SYNC_TZ=America/Bogota
+CRON_SECRET=<random>
+```
+
+5. Open the live app → Settings → **Conectar Google Drive** with an account that can read the folder.
+6. Optional backup: GitHub secrets `API_URL` + `CRON_SECRET` for `.github/workflows/drive-sync.yml`.
+
+Never commit client secrets. Never paste a Google password into the app.
+
+Unattended alternatives (Railway only): `GOOGLE_REFRESH_TOKEN` or `GOOGLE_SERVICE_ACCOUNT_JSON` (share the folder with the service account email).
 
 ## Health
 

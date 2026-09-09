@@ -304,22 +304,6 @@ export function ReportsPage() {
   );
 }
 
-export function SettingsPage() {
-  return (
-    <div className="card space-y-2">
-      <h2 className="text-xl font-bold">Settings</h2>
-      <p className="text-sm text-slate-500">Roles: ADMIN, QA_MANAGER, QA, VIEWER. Secretos solo en variables de entorno.</p>
-      <p className="text-sm">Google Drive OAuth se configura en Railway (`GOOGLE_CLIENT_ID`) — no se piden contraseñas de Google.</p>
-      <p className="text-sm">
-        Carpeta QA:{" "}
-        <a className="text-cyan-700" href="https://drive.google.com/drive/folders/1hCe3QBPraJEvt6H60KcCOiNIFzG6zdL-" target="_blank" rel="noreferrer">
-          pruebas qa
-        </a>
-      </p>
-    </div>
-  );
-}
-
 export function SearchPage() {
   const [params] = useSearchParams();
   const q = params.get("q") ?? "";

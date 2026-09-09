@@ -345,3 +345,32 @@ model AuditLog {
   payload    Json?
   createdAt  DateTime @default(now())
 }
+
+/// Singleton Google Drive OAuth connection (refresh token encrypted at rest).
+model DriveConnection {
+  id              String    @id @default("default")
+  googleEmail     String?
+  folderId        String
+  refreshTokenEnc String?
+  connectedAt     DateTime  @default(now())
+  lastSyncAt      DateTime?
+  lastError       String?
+  updatedAt       DateTime  @updatedAt
+}
+
+model DriveSyncRun {
+  id            String    @id @default(cuid())
+  startedAt     DateTime  @default(now())
+  finishedAt    DateTime?
+  status        String    @default("RUNNING")
+  trigger       String
+  filesSeen     Int       @default(0)
+  filesImported Int       @default(0)
+  filesSkipped  Int       @default(0)
+  filesPreview  Int       @default(0)
+  filesFailed   Int       @default(0)
+  summaryJson   Json?
+  errorMessage  String?
+
+  @@index([startedAt])
+}
