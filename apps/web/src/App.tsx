@@ -8,6 +8,7 @@ import { LoginPage } from "./pages/LoginPage";
 import { RunDetailPage } from "./pages/RunDetailPage";
 import { SettingsPage } from "./pages/SettingsPage";
 import { CatalogPage } from "./pages/CatalogPage";
+import { MatrixPage } from "./pages/MatrixPage";
 import {
   CasesPage,
   CoveragePage,
@@ -43,6 +44,7 @@ export default function App() {
         <Route path="runs" element={<RunsPage />} />
         <Route path="runs/:id" element={<RunDetailPage />} />
         <Route path="cases" element={<CasesPage />} />
+        <Route path="matrix" element={<MatrixPage />} />
         <Route path="catalog" element={<CatalogPage />} />
         <Route path="defects" element={<DefectsPage />} />
         <Route path="coverage" element={<CoveragePage />} />

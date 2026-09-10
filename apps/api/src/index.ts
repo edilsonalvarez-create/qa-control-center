@@ -11,6 +11,7 @@ import { authenticate, authorize } from "./lib/auth.js";
 import { authRoutes } from "./routes/auth.js";
 import { domainRoutes } from "./routes/domain.js";
 import { importRoutes } from "./routes/import.js";
+import { matrixRoutes } from "./routes/matrix.js";
 import { driveRoutes } from "./routes/drive.js";
 import { startDriveSyncScheduler } from "./jobs/drive-cron.js";
 import { repairProjectAttribution } from "./services/project-attribution.js";
@@ -57,6 +58,7 @@ async function build() {
   await app.register(authRoutes);
   await app.register(domainRoutes);
   await app.register(importRoutes);
+  await app.register(matrixRoutes);
   await driveRoutes(app, config);
 
   app.setErrorHandler((err, _req, reply) => {

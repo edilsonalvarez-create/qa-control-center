@@ -14,6 +14,7 @@ import {
   Settings,
   Shield,
   Sun,
+  Table2,
   Upload,
   Layers,
 } from "lucide-react";
@@ -26,6 +27,7 @@ const links = [
   { to: "/", label: "Dashboard", icon: LayoutDashboard },
   { to: "/runs", label: "Test Runs", icon: ClipboardList },
   { to: "/cases", label: "Test Cases", icon: Layers },
+  { to: "/matrix", label: "Matriz QA", icon: Table2 },
   { to: "/catalog", label: "Catálogo", icon: BookOpen },
   { to: "/defects", label: "Defects", icon: Bug },
   { to: "/coverage", label: "Coverage", icon: Shield },

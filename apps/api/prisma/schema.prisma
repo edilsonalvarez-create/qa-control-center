@@ -176,6 +176,7 @@ model TestRun {
   durationSec   Int?
   status        RunStatus   @default(UNKNOWN)
   observations  String?
+  origin        String      @default("IMPORT")
   fingerprint   String?
   sourceFileId  String?
   sourceFile    SourceFile? @relation(fields: [sourceFileId], references: [id])
@@ -224,10 +225,15 @@ model TestCase {
   release              String?
   sprint               String?
   severity             String?
+  origin               String       @default("IMPORT")
+  defectRef            String?
+  createdAt            DateTime     @default(now())
+  updatedAt            DateTime     @default(now()) @updatedAt
   defects              Defect[]
   evidence             Evidence[]
 
   @@index([fingerprint])
+  @@index([origin])
 }
 
 model CatalogItem {
@@ -261,6 +267,7 @@ model Defect {
   detectedDate  DateTime?
   resolvedDate  DateTime?
   resolution    String?
+  origin        String       @default("IMPORT")
   createdAt     DateTime     @default(now())
   updatedAt     DateTime     @updatedAt
   evidence      Evidence[]
