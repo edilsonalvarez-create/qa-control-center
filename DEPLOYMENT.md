@@ -4,7 +4,7 @@
 
 | Layer | URL | Git |
 | --- | --- | --- |
-| Frontend (Vercel) | https://qa-control-center-ten.vercel.app | Auto-deploys from GitHub on `edilsonalvarez-create` (team CAMPUS) |
+| Frontend (Vercel) | https://qa-control-center-six.vercel.app | Auto-deploys from GitHub on `edilsonalvarez-create` (team CAMPUS) |
 | API (Railway) | https://api-production-f1d3.up.railway.app | Auto-deploys from `edilsonalvarez-create/qa-control-center` branch `master` |
 | Health | https://api-production-f1d3.up.railway.app/health | |
 
@@ -96,7 +96,7 @@ The **Railway API** (not Vercel) lists and downloads Drive files. Schedule: `0 6
 4. Railway API variables:
 
 ```
-FRONTEND_URL=https://qa-control-center-ten.vercel.app
+FRONTEND_URL=https://qa-control-center-six.vercel.app
 GOOGLE_CLIENT_ID=
 GOOGLE_CLIENT_SECRET=
 GOOGLE_REDIRECT_URI=https://api-production-f1d3.up.railway.app/api/v1/integrations/google/callback
