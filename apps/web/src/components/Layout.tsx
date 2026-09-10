@@ -1,4 +1,4 @@
-import { NavLink, Outlet, useNavigate } from "react-router-dom";
+import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import {
   Activity,
   BookOpen,
@@ -40,6 +40,8 @@ const links = [
 export function Layout() {
   const { user, logout } = useAuth();
   const nav = useNavigate();
+  const { pathname } = useLocation();
+  const hidePageChrome = pathname === "/catalog" || pathname.startsWith("/catalog/");
   const [dark, setDark] = useState(() => localStorage.getItem("qacc_theme") !== "light");
   const [q, setQ] = useState("");
 
@@ -77,44 +79,59 @@ export function Layout() {
         <div className="border-t border-slate-200 p-4 text-xs dark:border-slate-800">
           <p className="font-medium">{user?.name}</p>
           <p className="text-slate-500">{user?.role}</p>
-          <button
-            className="mt-2 flex items-center gap-1 text-slate-500 hover:text-rose-500"
-            onClick={() => {
-              logout();
-              nav("/login");
-            }}
-          >
-            <LogOut size={14} /> Salir
-          </button>
+          <div className="mt-2 flex items-center gap-3">
+            <button
+              className="flex items-center gap-1 text-slate-500 hover:text-rose-500"
+              onClick={() => {
+                logout();
+                nav("/login");
+              }}
+            >
+              <LogOut size={14} /> Salir
+            </button>
+            {hidePageChrome && (
+              <button
+                onClick={() => setDark((d) => !d)}
+                className="ml-auto rounded-lg border border-slate-200 p-1.5 dark:border-slate-700"
+                aria-label="Tema"
+              >
+                {dark ? <Sun size={14} /> : <Moon size={14} />}
+              </button>
+            )}
+          </div>
         </div>
       </aside>
       <div className="ml-60">
-        <header className="sticky top-0 z-10 flex items-center gap-3 border-b border-slate-200 bg-white/90 px-6 py-3 backdrop-blur dark:border-slate-800 dark:bg-ink-900/90">
-          <form
-            className="relative flex-1"
-            onSubmit={async (e) => {
-              e.preventDefault();
-              if (!q.trim()) return;
-              nav(`/search?q=${encodeURIComponent(q)}`);
-            }}
-          >
-            <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
-            <input
-              value={q}
-              onChange={(e) => setQ(e.target.value)}
-              placeholder="Buscar: módulo, HTTP 429, defecto..."
-              className="w-full rounded-xl border border-slate-200 bg-slate-50 py-2 pl-9 pr-3 text-sm dark:border-slate-700 dark:bg-slate-900"
-            />
-          </form>
-          <button
-            onClick={() => setDark((d) => !d)}
-            className="rounded-xl border border-slate-200 p-2 dark:border-slate-700"
-            aria-label="Tema"
-          >
-            {dark ? <Sun size={16} /> : <Moon size={16} />}
-          </button>
-        </header>
-        <FilterBar />
+        {!hidePageChrome && (
+          <>
+            <header className="sticky top-0 z-10 flex items-center gap-3 border-b border-slate-200 bg-white/90 px-6 py-3 backdrop-blur dark:border-slate-800 dark:bg-ink-900/90">
+              <form
+                className="relative flex-1"
+                onSubmit={async (e) => {
+                  e.preventDefault();
+                  if (!q.trim()) return;
+                  nav(`/search?q=${encodeURIComponent(q)}`);
+                }}
+              >
+                <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
+                <input
+                  value={q}
+                  onChange={(e) => setQ(e.target.value)}
+                  placeholder="Buscar: módulo, HTTP 429, defecto..."
+                  className="w-full rounded-xl border border-slate-200 bg-slate-50 py-2 pl-9 pr-3 text-sm dark:border-slate-700 dark:bg-slate-900"
+                />
+              </form>
+              <button
+                onClick={() => setDark((d) => !d)}
+                className="rounded-xl border border-slate-200 p-2 dark:border-slate-700"
+                aria-label="Tema"
+              >
+                {dark ? <Sun size={16} /> : <Moon size={16} />}
+              </button>
+            </header>
+            <FilterBar />
+          </>
+        )}
         <main className="p-6">
           <Outlet />
         </main>
