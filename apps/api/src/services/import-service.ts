@@ -10,7 +10,7 @@ import {
 } from "@prisma/client";
 import { prisma } from "../lib/prisma.js";
 import { parseUpload, type ParseResult } from "../parsers/index.js";
-import { looksLikeCopy, mapEnvironment, mapTestType } from "../parsers/normalize.js";
+import { looksLikeCopy, mapEnvironment, mapTestType, resolveProjectName } from "../parsers/normalize.js";
 import { hasCaseInformation } from "../lib/case-info.js";
 import crypto from "node:crypto";
 import type { ParsedCase } from "../parsers/types.js";
@@ -425,7 +425,16 @@ export async function commitImport(jobId: string, userId: string, force = false)
 
   const groups = new Map<string, ParsedCase[]>();
   for (const c of parsed.cases) {
-    const name = c.project || parsed.detectedProject || "Unknown";
+    const name =
+      resolveProjectName({
+        fileName: job.sourceFile?.fileName,
+        sourcePath: job.sourceFile?.sourceUrl ?? undefined,
+        client: c.project,
+        moduleName: c.module,
+      }) ||
+      c.project ||
+      parsed.detectedProject ||
+      "Unknown";
     const list = groups.get(name) ?? [];
     list.push(c);
     groups.set(name, list);

@@ -13,6 +13,7 @@ import { domainRoutes } from "./routes/domain.js";
 import { importRoutes } from "./routes/import.js";
 import { driveRoutes } from "./routes/drive.js";
 import { startDriveSyncScheduler } from "./jobs/drive-cron.js";
+import { repairProjectAttribution } from "./services/project-attribution.js";
 
 async function build() {
   const config = loadConfig();
@@ -76,6 +77,7 @@ try {
   await app.listen({ port: config.PORT, host: "0.0.0.0" });
   logger.info(`API listening on ${config.PORT}`);
   startDriveSyncScheduler(config);
+  repairProjectAttribution().catch((err) => logger.error({ err }, "project attribution repair failed"));
 } catch (err) {
   logger.error({ err }, "failed to listen");
   process.exit(1);

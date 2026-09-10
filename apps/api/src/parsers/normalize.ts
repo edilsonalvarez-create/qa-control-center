@@ -163,13 +163,46 @@ function projectFromDrivePath(sourcePath?: string): string | undefined {
   return undefined;
 }
 
+function projectFromModuleHints(text: string): string | undefined {
+  const n = normalizeKey(text);
+  if (!n) return undefined;
+  if (/\bphq\b/.test(n) || /stop bang/.test(n) || /\bgerdq\b/.test(n) || /escalas clinicas/.test(n)) {
+    return "MEDICINA INTEGRAL";
+  }
+  if (/escalas respiratorias/.test(n)) return "MEDICINA INTEGRAL";
+  return undefined;
+}
+
+export function resolveProjectName(opts: {
+  fileName?: string;
+  sourcePath?: string;
+  client?: string;
+  moduleName?: string;
+}): string | undefined {
+  const hinted = projectFromModuleHints(
+    [opts.fileName, opts.sourcePath, opts.moduleName, opts.client].filter(Boolean).join(" "),
+  );
+  if (hinted) return hinted;
+  const fromPath = projectFromDrivePath(opts.sourcePath);
+  if (fromPath) return fromPath;
+  const fromClient = normalizeProjectName(opts.client);
+  if (fromClient && /^(SUMIMEDICAL|MEDICINA INTEGRAL|FERROCARRILES|SANOVA|FOMAG)$/.test(fromClient)) {
+    return fromClient;
+  }
+  const fromName = projectFromNameHints(opts.fileName ?? "");
+  if (fromName) return fromName;
+  if (opts.fileName && /(matriz_qa|ejecucion_qa|horus)/i.test(opts.fileName) && !/horus-m\.i/i.test(opts.fileName)) {
+    return "SUMIMEDICAL";
+  }
+  return fromClient;
+}
+
 export function inferFromFileName(fileName: string, sourcePath?: string) {
   const n = fileName.toLowerCase();
   let moduleName: string | undefined;
   let testType = "FUNCTIONAL";
   let environment: string | undefined;
-  let project = projectFromDrivePath(sourcePath) ?? projectFromNameHints(fileName);
-  if (!project && /(matriz_qa|ejecucion_qa|horus)/i.test(n) && !/horus-m\.i/i.test(n)) project = "SUMIMEDICAL";
+  let project = resolveProjectName({ fileName, sourcePath });
 
   if (n.includes("playwright") || n.includes(".spec.")) testType = "E2E";
   if (n.includes("rtm")) testType = "RTM";

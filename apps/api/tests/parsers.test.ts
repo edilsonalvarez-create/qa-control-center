@@ -10,6 +10,7 @@ import {
   looksLikeCopy,
   mapStatus,
   normalizeProjectName,
+  resolveProjectName,
 } from "../src/parsers/normalize.js";
 
 describe("header detection", () => {
@@ -235,12 +236,25 @@ describe("project from Drive folder", () => {
     expect(fromFolder.project).toBe("MEDICINA INTEGRAL");
     expect(inferFromFileName("Matriz_QA_Atencion_Particular.xlsx").project).toBe("SUMIMEDICAL");
     expect(inferFromFileName("Validacion_Modulos_Horus-M.I.xlsx").project).toBe("MEDICINA INTEGRAL");
+    expect(inferFromFileName("Matriz_QA_Escalas_Clinicas_PHQ_STOP-BANG_GERDQ.xlsx").project).toBe("MEDICINA INTEGRAL");
+    expect(
+      inferFromFileName(
+        "Matriz_QA_Escalas_Clinicas_PHQ.xlsx",
+        "SUMIMEDICAL/Matriz_QA_Escalas_Clinicas_PHQ.xlsx",
+      ).project,
+    ).toBe("MEDICINA INTEGRAL");
   });
 
   it("normalizes client aliases from the standard matrix", () => {
     expect(normalizeProjectName("SUMI (Sumimedical)")).toBe("SUMIMEDICAL");
     expect(normalizeProjectName("MEDICINA INTEGRAL")).toBe("MEDICINA INTEGRAL");
     expect(normalizeProjectName("FOMAG")).toBe("FOMAG");
+    expect(
+      resolveProjectName({
+        client: "SUMI (Sumimedical)",
+        moduleName: "Escalas Clinicas PHQ,STOP-BANG,GERDQ",
+      }),
+    ).toBe("MEDICINA INTEGRAL");
   });
 });
 

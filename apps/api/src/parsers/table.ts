@@ -1,5 +1,5 @@
 import { isLikelyHeaderRow, mapHeader, mappedCell, pickHeader } from "./columns.js";
-import { fingerprint, inferFromFileName, mapStatus, normalizeProjectName, normalizeText } from "./normalize.js";
+import { fingerprint, inferFromFileName, mapStatus, normalizeText, resolveProjectName } from "./normalize.js";
 import { hasCaseInformation } from "../lib/case-info.js";
 import type { CatalogItemParsed, HeaderMapping, ParsedCase, ParseResult, ParseWarning } from "./types.js";
 
@@ -96,8 +96,14 @@ export function parseCaseRows(rows: string[][], fileName: string, sourcePath?: s
     const title = get("title") || get("externalId");
     const externalId = get("externalId") || undefined;
     if (!hasCaseInformation({ title, externalId })) continue;
-    const project = normalizeProjectName(get("project")) || inferred.project;
     const moduleName = get("module") || inferred.moduleName;
+    const project =
+      resolveProjectName({
+        fileName,
+        sourcePath,
+        client: get("project"),
+        moduleName,
+      }) || inferred.project;
     const date = get("date");
     const version = get("version");
     const status = mapStatus(get("status"));
