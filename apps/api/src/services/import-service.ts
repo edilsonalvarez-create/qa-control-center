@@ -13,6 +13,7 @@ import { parseUpload, type ParseResult } from "../parsers/index.js";
 import { looksLikeCopy, mapEnvironment, mapTestType } from "../parsers/normalize.js";
 import crypto from "node:crypto";
 import type { ParsedCase } from "../parsers/types.js";
+import { upsertCatalogItems } from "./catalog-service.js";
 
 const TEST_TYPES = new Set(Object.values(TestType));
 const ENVS = new Set(Object.values(Environment));
@@ -197,17 +198,6 @@ function buildPreview(
     requiresConfirmation: duplicates.length > 0,
     mapping: parsed.headers,
   };
-}
-
-async function upsertCatalog(items?: ParseResult["catalog"]) {
-  if (!items?.length) return;
-  for (const item of items) {
-    await prisma.catalogItem.upsert({
-      where: { category_value: { category: item.category, value: item.value } },
-      update: { sortOrder: item.sortOrder },
-      create: { category: item.category, value: item.value, sortOrder: item.sortOrder },
-    });
-  }
 }
 
 async function ensureProject(name: string, product?: string) {
@@ -428,7 +418,7 @@ export async function commitImport(jobId: string, userId: string, force = false)
 
   const preview = job.previewJson as ReturnType<typeof buildPreview>;
   const parsed = preview.parsed as ParseResult;
-  await upsertCatalog(parsed.catalog);
+  await upsertCatalogItems(parsed.catalog ?? []);
 
   const groups = new Map<string, ParsedCase[]>();
   for (const c of parsed.cases) {

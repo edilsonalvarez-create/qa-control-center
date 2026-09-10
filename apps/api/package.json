@@ -15,7 +15,8 @@
     "prisma:migrate:dev": "prisma migrate dev",
     "prisma:push": "prisma db push",
     "prisma:seed": "tsx prisma/seed.ts",
-    "import:local-matrix": "tsx scripts/import-local-matrix.ts"
+    "import:local-matrix": "tsx scripts/import-local-matrix.ts",
+    "import:catalog": "tsx scripts/import-catalog.ts"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"

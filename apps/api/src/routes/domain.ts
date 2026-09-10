@@ -3,6 +3,14 @@ import { DefectStatus } from "@prisma/client";
 import { z } from "zod";
 import { parseFilters } from "../lib/filters.js";
 import { prisma } from "../lib/prisma.js";
+import {
+  createCatalogItem,
+  deleteCatalogItem,
+  importCatalogWorkbook,
+  isCatalogCategory,
+  listCatalog,
+  updateCatalogItem,
+} from "../services/catalog-service.js";
 import { getCoverage, getDashboard, runWhere, searchAll } from "../services/query-service.js";
 import { sanitizeQuery } from "../lib/auth.js";
 
@@ -180,6 +188,78 @@ export async function domainRoutes(app: FastifyInstance) {
   });
 
   app.get("/api/v1/catalog", { preHandler: [app.authenticate] }, async () => {
-    return prisma.catalogItem.findMany({ orderBy: [{ category: "asc" }, { sortOrder: "asc" }, { value: "asc" }] });
+    return listCatalog();
+  });
+
+  app.post("/api/v1/catalog", { preHandler: [app.authenticate, app.requireQa] }, async (request, reply) => {
+    const body = z.object({ category: z.string(), value: z.string().min(1).max(200) }).safeParse(request.body);
+    if (!body.success || !isCatalogCategory(body.data.category)) {
+      return reply.code(400).send({ error: "Invalid catalog item" });
+    }
+    try {
+      const item = await createCatalogItem(body.data.category, body.data.value);
+      const user = request.user as { sub: string };
+      await prisma.auditLog.create({
+        data: { userId: user.sub, action: "CATALOG_CREATE", entity: "CatalogItem", entityId: item.id, payload: body.data },
+      });
+      return item;
+    } catch (err) {
+      const e = err as Error & { statusCode?: number };
+      return reply.code(e.statusCode ?? 500).send({ error: e.message });
+    }
+  });
+
+  app.patch("/api/v1/catalog/:id", { preHandler: [app.authenticate, app.requireQa] }, async (request, reply) => {
+    const { id } = request.params as { id: string };
+    const body = z.object({ value: z.string().min(1).max(200) }).safeParse(request.body);
+    if (!body.success) return reply.code(400).send({ error: "Invalid payload" });
+    try {
+      const item = await updateCatalogItem(id, body.data.value);
+      const user = request.user as { sub: string };
+      await prisma.auditLog.create({
+        data: { userId: user.sub, action: "CATALOG_UPDATE", entity: "CatalogItem", entityId: id, payload: body.data },
+      });
+      return item;
+    } catch (err) {
+      const e = err as Error & { statusCode?: number };
+      return reply.code(e.statusCode ?? 500).send({ error: e.message });
+    }
+  });
+
+  app.delete("/api/v1/catalog/:id", { preHandler: [app.authenticate, app.requireQa] }, async (request, reply) => {
+    const { id } = request.params as { id: string };
+    try {
+      const result = await deleteCatalogItem(id);
+      const user = request.user as { sub: string };
+      await prisma.auditLog.create({
+        data: { userId: user.sub, action: "CATALOG_DELETE", entity: "CatalogItem", entityId: id },
+      });
+      return result;
+    } catch (err) {
+      const e = err as Error & { statusCode?: number };
+      return reply.code(e.statusCode ?? 500).send({ error: e.message });
+    }
+  });
+
+  app.post("/api/v1/catalog/import", { preHandler: [app.authenticate, app.requireQa] }, async (request, reply) => {
+    const file = await request.file();
+    if (!file) return reply.code(400).send({ error: "File required" });
+    const buffer = await file.toBuffer();
+    try {
+      const result = await importCatalogWorkbook(file.filename, file.mimetype, buffer);
+      const user = request.user as { sub: string };
+      await prisma.auditLog.create({
+        data: {
+          userId: user.sub,
+          action: "CATALOG_IMPORT",
+          entity: "CatalogItem",
+          payload: { fileName: file.filename, upserted: result.upserted },
+        },
+      });
+      return result;
+    } catch (err) {
+      const e = err as Error & { statusCode?: number };
+      return reply.code(e.statusCode ?? 500).send({ error: e.message });
+    }
   });
 }

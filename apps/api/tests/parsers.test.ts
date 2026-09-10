@@ -209,6 +209,21 @@ describe("excel parser", () => {
     expect(result.cases.some((c) => c.externalId === "DEF-999")).toBe(false);
     expect(result.warnings.some((w) => w.code === "CATALOG_PARSED")).toBe(true);
   });
+
+  it("reads a catalog-only workbook even when the sheet is named Hoja1", async () => {
+    const wb = new ExcelJS.Workbook();
+    const sheet = wb.addWorksheet("Hoja1");
+    sheet.addRow(["Clientes", "Modulos", "Tipo de Prueba", "Nivel", "Prioridad"]);
+    sheet.addRow(["SUMI (Sumimedical)", "Medicamentos", "Funcional", "Integración", "Alta"]);
+    sheet.addRow(["FOMAG", "Incapacidades", "Humo (Smoke)", "", ""]);
+    const buffer = Buffer.from(await wb.xlsx.writeBuffer());
+    const result = await parseExcel(buffer, "Catalogo.xlsx");
+    expect(result.cases).toHaveLength(0);
+    expect(result.catalog?.some((i) => i.category === "CLIENT" && i.value.includes("SUMI"))).toBe(true);
+    expect(result.catalog?.some((i) => i.category === "CLIENT" && i.value === "FOMAG")).toBe(true);
+    expect(result.catalog?.some((i) => i.category === "MODULE" && i.value === "Medicamentos")).toBe(true);
+    expect(result.warnings.some((w) => w.code === "CATALOG_ONLY")).toBe(true);
+  });
 });
 
 describe("project from Drive folder", () => {

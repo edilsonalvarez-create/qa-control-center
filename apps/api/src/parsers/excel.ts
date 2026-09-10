@@ -1,5 +1,5 @@
 import ExcelJS from "exceljs";
-import { isCatalogSheetName, parseCatalogRows } from "./catalog.js";
+import { isCatalogSheetName, looksLikeCatalogHeaderRow, mergeCatalog, parseCatalogRows } from "./catalog.js";
 import { inferFromFileName } from "./normalize.js";
 import { isSkippedSheetName, parseCaseRows, scoreHeaderRow, scoreSheetName, toParseResult } from "./table.js";
 import type { CatalogItemParsed, ParseResult } from "./types.js";
@@ -60,8 +60,8 @@ export async function parseExcel(buffer: Buffer, fileName: string, sourcePath?: 
   let best: { rows: string[][]; score: number; name: string } | undefined;
   for (const sheet of wb.worksheets) {
     const rows = sheetRows(sheet);
-    if (isCatalogSheetName(sheet.name)) {
-      catalog = parseCatalogRows(rows);
+    if (isCatalogSheetName(sheet.name) || looksLikeCatalogHeaderRow(rows[0] ?? [])) {
+      catalog = mergeCatalog(catalog, parseCatalogRows(rows));
       continue;
     }
     if (isSkippedSheetName(sheet.name)) continue;
@@ -78,12 +78,19 @@ export async function parseExcel(buffer: Buffer, fileName: string, sourcePath?: 
       cases: [],
       catalog: catalog.length ? catalog : undefined,
       defects: [],
-      warnings: [
-        {
-          code: "HEADERS_UNKNOWN",
-          message: "Could not detect a header row with confidence. Rows were not imported as cases.",
-        },
-      ],
+      warnings: catalog.length
+        ? [
+            {
+              code: "CATALOG_ONLY",
+              message: `Read ${catalog.length} catalog values. No test-case sheet was imported.`,
+            },
+          ]
+        : [
+            {
+              code: "HEADERS_UNKNOWN",
+              message: "Could not detect a header row with confidence. Rows were not imported as cases.",
+            },
+          ],
       testType: inferred.testType,
       detectedProject: inferred.project,
       detectedModule: inferred.moduleName,

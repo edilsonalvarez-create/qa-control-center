@@ -1,7 +1,24 @@
 import { normalizeText } from "./normalize.js";
 import type { CatalogItemParsed } from "./types.js";
 
-const HEADER_CATEGORY: Array<[RegExp, string]> = [
+export const CATALOG_CATEGORIES = [
+  "CLIENT",
+  "MODULE",
+  "TEST_TYPE",
+  "LEVEL",
+  "PRIORITY",
+  "SEVERITY",
+  "EXEC_STATUS",
+  "DEFECT_STATUS",
+  "ENVIRONMENT",
+  "TOOL",
+  "AUTOMATABLE",
+  "OWNER",
+] as const;
+
+export type CatalogCategory = (typeof CATALOG_CATEGORIES)[number];
+
+const HEADER_CATEGORY: Array<[RegExp, CatalogCategory]> = [
   [/^clientes?$/i, "CLIENT"],
   [/^modulos?$/i, "MODULE"],
   [/^tipo de prueba$/i, "TEST_TYPE"],
@@ -25,7 +42,7 @@ function catalogKey(header: string): string {
     .trim();
 }
 
-function categoryForHeader(header: string): string | undefined {
+export function categoryForHeader(header: string): CatalogCategory | undefined {
   const n = catalogKey(header);
   if (!n) return undefined;
   return HEADER_CATEGORY.find(([re]) => re.test(n))?.[1];
@@ -37,6 +54,11 @@ export function isCatalogSheetName(name: string): boolean {
     .normalize("NFD")
     .replace(/\p{Diacritic}/gu, "");
   return /catalog/.test(n);
+}
+
+export function looksLikeCatalogHeaderRow(cells: string[]): boolean {
+  const cats = new Set(cells.map((c) => categoryForHeader(c)).filter(Boolean));
+  return cats.size >= 4;
 }
 
 export function parseCatalogRows(rows: string[][]): CatalogItemParsed[] {
@@ -58,4 +80,16 @@ export function parseCatalogRows(rows: string[][]): CatalogItemParsed[] {
     }
   }
   return items;
+}
+
+export function mergeCatalog(into: CatalogItemParsed[], extra: CatalogItemParsed[]): CatalogItemParsed[] {
+  const seen = new Set(into.map((i) => `${i.category}|${i.value.toLowerCase()}`));
+  const out = [...into];
+  for (const item of extra) {
+    const key = `${item.category}|${item.value.toLowerCase()}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push({ ...item, sortOrder: out.filter((i) => i.category === item.category).length });
+  }
+  return out;
 }
