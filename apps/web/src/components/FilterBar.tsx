@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useLocation } from "react-router-dom";
 import { api, toQuery } from "../lib/api";
 import { useFilters } from "../lib/filters";
 
@@ -7,17 +8,37 @@ type Module = { id: string; name: string; projectId: string };
 
 export function FilterBar() {
   const { filters, setFilters } = useFilters();
+  const { pathname } = useLocation();
+  const scope = pathname === "/" ? "informative" : "executed";
   const [projects, setProjects] = useState<Project[]>([]);
   const [modules, setModules] = useState<Module[]>([]);
+  const [modulesReady, setModulesReady] = useState(false);
 
   useEffect(() => {
-    api<Project[]>("/api/v1/projects").then(setProjects).catch(() => setProjects([]));
-  }, []);
+    api<Project[]>(`/api/v1/projects${toQuery({ scope })}`)
+      .then(setProjects)
+      .catch(() => setProjects([]));
+  }, [scope]);
   useEffect(() => {
-    api<Module[]>(`/api/v1/modules${toQuery({ projectId: filters.projectId })}`)
-      .then(setModules)
-      .catch(() => setModules([]));
-  }, [filters.projectId]);
+    setModulesReady(false);
+    api<Module[]>(`/api/v1/modules${toQuery({ projectId: filters.projectId, scope })}`)
+      .then((rows) => {
+        setModules(rows);
+        setModulesReady(true);
+      })
+      .catch(() => {
+        setModules([]);
+        setModulesReady(true);
+      });
+  }, [filters.projectId, scope]);
+
+  useEffect(() => {
+    if (!modulesReady) return;
+    if (filters.moduleId && !modules.some((m) => m.id === filters.moduleId)) {
+      setFilters({ ...filters, moduleId: undefined });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [modulesReady, modules, scope]);
 
   const set = (k: string, v: string) => setFilters({ ...filters, [k]: v || undefined });
 

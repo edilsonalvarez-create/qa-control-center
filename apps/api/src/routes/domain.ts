@@ -11,7 +11,12 @@ import {
   listCatalog,
   updateCatalogItem,
 } from "../services/catalog-service.js";
-import { getCoverage, getDashboard, runWhere, searchAll } from "../services/query-service.js";
+import { getCoverage, getDashboard, runListWhere, searchAll } from "../services/query-service.js";
+import {
+  caseWhere,
+  informativeCaseWhere,
+  listableCaseWhere,
+} from "../lib/case-visibility.js";
 import { sanitizeQuery } from "../lib/auth.js";
 
 export async function domainRoutes(app: FastifyInstance) {
@@ -19,14 +24,38 @@ export async function domainRoutes(app: FastifyInstance) {
     return getDashboard(parseFilters(request));
   });
 
-  app.get("/api/v1/projects", { preHandler: [app.authenticate] }, async () => {
-    return prisma.project.findMany({ include: { _count: { select: { modules: true, testRuns: true } } }, orderBy: { name: "asc" } });
+  app.get("/api/v1/projects", { preHandler: [app.authenticate] }, async (request) => {
+    const scope = String((request.query as { scope?: string }).scope ?? "executed");
+    const vis = scope === "informative" ? informativeCaseWhere() : listableCaseWhere();
+    const cases = await prisma.testCase.findMany({
+      where: vis,
+      select: { testRun: { select: { projectId: true } } },
+    });
+    const ids = [...new Set(cases.map((c) => c.testRun.projectId))];
+    if (!ids.length) return [];
+    return prisma.project.findMany({
+      where: { id: { in: ids } },
+      include: { _count: { select: { modules: true, testRuns: true } } },
+      orderBy: { name: "asc" },
+    });
   });
 
   app.get("/api/v1/modules", { preHandler: [app.authenticate] }, async (request) => {
     const f = parseFilters(request);
+    const scope = String((request.query as { scope?: string }).scope ?? "executed");
+    const vis = scope === "informative" ? "informative" : "listable";
+    const cases = await prisma.testCase.findMany({
+      where: await caseWhere({ ...f, moduleId: undefined }, vis),
+      select: { moduleName: true, testRun: { select: { moduleId: true } } },
+    });
+    const ids = [...new Set(cases.map((c) => c.testRun.moduleId).filter((id): id is string => Boolean(id)))];
+    const names = [...new Set(cases.map((c) => c.moduleName).filter((n): n is string => Boolean(n)))];
+    if (!ids.length && !names.length) return [];
     return prisma.module.findMany({
-      where: { projectId: f.projectId },
+      where: {
+        projectId: f.projectId || undefined,
+        OR: [...(ids.length ? [{ id: { in: ids } }] : []), ...(names.length ? [{ name: { in: names } }] : [])],
+      },
       include: { project: true },
       orderBy: { name: "asc" },
     });
@@ -35,7 +64,7 @@ export async function domainRoutes(app: FastifyInstance) {
   app.get("/api/v1/test-runs", { preHandler: [app.authenticate] }, async (request) => {
     const f = parseFilters(request);
     return prisma.testRun.findMany({
-      where: runWhere(f),
+      where: await runListWhere(f),
       include: { project: true, module: true, sourceFile: true, _count: { select: { testCases: true, defects: true } } },
       orderBy: { executionDate: "desc" },
     });
@@ -49,7 +78,10 @@ export async function domainRoutes(app: FastifyInstance) {
         project: true,
         module: true,
         sourceFile: true,
-        testCases: { include: { defects: { include: { evidence: true } }, evidence: true } },
+        testCases: {
+          where: listableCaseWhere(),
+          include: { defects: { include: { evidence: true } }, evidence: true },
+        },
         defects: { include: { evidence: true, testCase: true } },
         evidence: { include: { sourceFile: true } },
       },
@@ -61,10 +93,7 @@ export async function domainRoutes(app: FastifyInstance) {
   app.get("/api/v1/test-cases", { preHandler: [app.authenticate] }, async (request) => {
     const f = parseFilters(request);
     return prisma.testCase.findMany({
-      where: {
-        status: f.result as never,
-        testRun: runWhere(f),
-      },
+      where: await caseWhere(f, "listable"),
       include: { testRun: { include: { project: true, module: true } }, defects: true },
       orderBy: { title: "asc" },
       take: 500,
@@ -122,7 +151,7 @@ export async function domainRoutes(app: FastifyInstance) {
   app.get("/api/v1/timeline", { preHandler: [app.authenticate] }, async (request) => {
     const f = parseFilters(request);
     return prisma.testRun.findMany({
-      where: runWhere(f),
+      where: await runListWhere(f),
       include: { project: true, module: true, _count: { select: { defects: true } } },
       orderBy: { executionDate: "desc" },
       take: 200,
@@ -150,7 +179,7 @@ export async function domainRoutes(app: FastifyInstance) {
   app.get("/api/v1/reports/export", { preHandler: [app.authenticate] }, async (request, reply) => {
     const f = parseFilters(request);
     const runs = await prisma.testRun.findMany({
-      where: runWhere(f),
+      where: await runListWhere(f),
       include: { project: true, module: true },
       orderBy: { executionDate: "desc" },
     });

@@ -69,7 +69,7 @@ export function CasesPage() {
   const { query } = useFilters();
   const { rows, error } = useApiList<any>(`/api/v1/test-cases${toQuery(query)}`, [query]);
   if (error) return <p className="text-rose-500">{error}</p>;
-  if (!rows.length) return <EmptyState title="Sin casos" hint="Importa una matriz desde Import Center." />;
+  if (!rows.length) return <EmptyState title="Sin casos ejecutados" hint="Los casos pendientes por testear se ven en el Dashboard. Los registros sin información no se listan." />;
   return (
     <div className="card overflow-x-auto">
       <h2 className="mb-3 text-xl font-bold">Test Cases</h2>

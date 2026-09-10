@@ -11,6 +11,7 @@ import {
 import { prisma } from "../lib/prisma.js";
 import { parseUpload, type ParseResult } from "../parsers/index.js";
 import { looksLikeCopy, mapEnvironment, mapTestType } from "../parsers/normalize.js";
+import { hasCaseInformation } from "../lib/case-info.js";
 import crypto from "node:crypto";
 import type { ParsedCase } from "../parsers/types.js";
 import { upsertCatalogItems } from "./catalog-service.js";
@@ -225,7 +226,9 @@ async function persistRun(opts: {
   };
   extraDefects: ParseResult["defects"];
 }) {
-  const { projectName, cases, parsed, job, extraDefects } = opts;
+  const { projectName, parsed, job, extraDefects } = opts;
+  const cases = opts.cases.filter(hasCaseInformation);
+  if (!cases.length && !(parsed.metrics?.totalTests)) return null;
   const project = await ensureProject(projectName, cases.find((c) => c.product)?.product);
   const defaultModuleName = cases.find((c) => c.module)?.module ?? parsed.detectedModule;
   let moduleId: string | undefined;
@@ -444,7 +447,7 @@ export async function commitImport(jobId: string, userId: string, force = false)
       job,
       extraDefects,
     });
-    runIds.push(run.id);
+    if (run) runIds.push(run.id);
   }
 
   await prisma.importJob.update({

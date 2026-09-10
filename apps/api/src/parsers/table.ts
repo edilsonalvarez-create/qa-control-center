@@ -1,5 +1,6 @@
 import { isLikelyHeaderRow, mapHeader, mappedCell, pickHeader } from "./columns.js";
 import { fingerprint, inferFromFileName, mapStatus, normalizeProjectName, normalizeText } from "./normalize.js";
+import { hasCaseInformation } from "../lib/case-info.js";
 import type { CatalogItemParsed, HeaderMapping, ParsedCase, ParseResult, ParseWarning } from "./types.js";
 
 export function scoreHeaderRow(cells: string[]): number {
@@ -93,7 +94,8 @@ export function parseCaseRows(rows: string[][], fileName: string, sourcePath?: s
     const get = (role: HeaderMapping["role"]) => mappedCell(headers, raw, role);
     if (pickHeader(headers, "externalId") && !get("externalId")) continue;
     const title = get("title") || get("externalId");
-    if (!title) continue;
+    const externalId = get("externalId") || undefined;
+    if (!hasCaseInformation({ title, externalId })) continue;
     const project = normalizeProjectName(get("project")) || inferred.project;
     const moduleName = get("module") || inferred.moduleName;
     const date = get("date");
@@ -101,7 +103,7 @@ export function parseCaseRows(rows: string[][], fileName: string, sourcePath?: s
     const status = mapStatus(get("status"));
     const steps = get("steps") || undefined;
     cases.push({
-      externalId: get("externalId") || undefined,
+      externalId,
       title: title || "Requires review",
       description: get("description") || get("preconditions") || steps || undefined,
       status,

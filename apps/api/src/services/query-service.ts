@@ -1,28 +1,12 @@
 import { CaseStatus, DefectStatus, Prisma, Severity } from "@prisma/client";
+import {
+  caseWhere,
+  isExecutedStatus,
+  isPendingStatus,
+  listableCaseWhere,
+} from "../lib/case-visibility.js";
 import { prisma } from "../lib/prisma.js";
-import { dateRange, type FilterQuery } from "../lib/filters.js";
-
-function runWhere(f: FilterQuery): Prisma.TestRunWhereInput {
-  const executionDate = dateRange(f.from, f.to);
-  return {
-    projectId: f.projectId || undefined,
-    moduleId: f.moduleId || undefined,
-    tester: f.tester ? { contains: f.tester, mode: "insensitive" } : undefined,
-    testType: f.testType ? (f.testType as Prisma.EnumTestTypeFilter) : undefined,
-    environment: f.environment ? (f.environment as Prisma.EnumEnvironmentFilter) : undefined,
-    version: f.version || undefined,
-    executionDate,
-    status: f.result
-      ? f.result === "PASS"
-        ? "PASSED"
-        : f.result === "FAIL"
-          ? "FAILED"
-          : f.result === "BLOCKED"
-            ? "BLOCKED"
-            : undefined
-      : undefined,
-  };
-}
+import { type FilterQuery } from "../lib/filters.js";
 
 function emptyCaseMix() {
   return { passed: 0, failed: 0, blocked: 0, skipped: 0, unknown: 0, review: 0, total: 0 };
@@ -43,37 +27,34 @@ function addCaseStatus(
 }
 
 export async function getDashboard(f: FilterQuery) {
-  const where = runWhere(f);
-  const runs = await prisma.testRun.findMany({
-    where,
-    include: { testCases: { select: { status: true } } },
-  });
-  const runTotals = runs.reduce(
-    (acc, r) => {
-      acc.totalTests += r.totalTests;
-      acc.passed += r.passed;
-      acc.failed += r.failed;
-      acc.blocked += r.blocked;
-      acc.skipped += r.skipped;
-      acc.runs += 1;
-      return acc;
+  const cases = await prisma.testCase.findMany({
+    where: await caseWhere(f, "informative"),
+    select: {
+      status: true,
+      testRunId: true,
+      moduleName: true,
+      testRun: {
+        select: {
+          executionDate: true,
+          projectId: true,
+          moduleId: true,
+          project: { select: { id: true, name: true, status: true, product: true } },
+        },
+      },
     },
-    { totalTests: 0, passed: 0, failed: 0, blocked: 0, skipped: 0, runs: 0 },
-  );
+  });
   const fromEstado = emptyCaseMix();
-  for (const r of runs) {
-    for (const c of r.testCases) addCaseStatus(fromEstado, c.status);
-  }
-  const useEstado = fromEstado.total > 0;
+  for (const c of cases) addCaseStatus(fromEstado, c.status);
+  const executedRunIds = new Set(cases.filter((c) => isExecutedStatus(c.status)).map((c) => c.testRunId));
   const totals = {
-    totalTests: useEstado ? fromEstado.total : runTotals.totalTests,
-    passed: useEstado ? fromEstado.passed : runTotals.passed,
-    failed: useEstado ? fromEstado.failed : runTotals.failed,
-    blocked: useEstado ? fromEstado.blocked : runTotals.blocked,
-    skipped: useEstado ? fromEstado.skipped : runTotals.skipped,
-    unknown: useEstado ? fromEstado.unknown : 0,
-    review: useEstado ? fromEstado.review : 0,
-    runs: runTotals.runs,
+    totalTests: fromEstado.total,
+    passed: fromEstado.passed,
+    failed: fromEstado.failed,
+    blocked: fromEstado.blocked,
+    skipped: fromEstado.skipped,
+    unknown: fromEstado.unknown,
+    review: fromEstado.review,
+    runs: executedRunIds.size,
   };
 
   const defectWhere: Prisma.DefectWhereInput = {
@@ -92,12 +73,6 @@ export async function getDashboard(f: FilterQuery) {
   const critical = defects.filter((d) => d.severity === Severity.CRITICAL);
   const retest = defects.filter((d) => d.status === DefectStatus.READY_FOR_RETEST);
 
-  const modules = await prisma.module.findMany({
-    where: { projectId: f.projectId || undefined },
-    include: { testRuns: { orderBy: { executionDate: "desc" }, take: 1 } },
-  });
-  const tested = modules.filter((m) => m.testRuns.length > 0).length;
-  const coveragePct = modules.length ? Math.round((tested / modules.length) * 100) : 0;
   const decided = totals.passed + totals.failed + totals.blocked;
   const successPct = decided ? Math.round((totals.passed / decided) * 100) : null;
 
@@ -105,55 +80,67 @@ export async function getDashboard(f: FilterQuery) {
     string,
     { date: string; passed: number; failed: number; blocked: number; skipped: number; unknown: number }
   >();
-  for (const r of runs) {
-    const key = r.executionDate.toISOString().slice(0, 10);
+  for (const c of cases) {
+    const key = c.testRun.executionDate.toISOString().slice(0, 10);
     const cur = byDayMap.get(key) ?? { date: key, passed: 0, failed: 0, blocked: 0, skipped: 0, unknown: 0 };
-    if (r.testCases.length) {
-      for (const c of r.testCases) {
-        if (c.status === CaseStatus.PASS) cur.passed += 1;
-        else if (c.status === CaseStatus.FAIL) cur.failed += 1;
-        else if (c.status === CaseStatus.BLOCKED) cur.blocked += 1;
-        else if (c.status === CaseStatus.SKIPPED) cur.skipped += 1;
-        else cur.unknown += 1;
-      }
-    } else {
-      cur.passed += r.passed;
-      cur.failed += r.failed;
-      cur.blocked += r.blocked;
-      cur.skipped += r.skipped;
-    }
+    if (c.status === CaseStatus.PASS) cur.passed += 1;
+    else if (c.status === CaseStatus.FAIL) cur.failed += 1;
+    else if (c.status === CaseStatus.BLOCKED) cur.blocked += 1;
+    else if (c.status === CaseStatus.SKIPPED) cur.skipped += 1;
+    else if (isPendingStatus(c.status) || c.status === CaseStatus.REQUIRES_REVIEW) cur.unknown += 1;
     byDayMap.set(key, cur);
   }
 
-  const projects = await prisma.project.findMany({
-    include: { testRuns: { include: { testCases: { select: { status: true } } } }, defects: true },
-  });
-
-  const byProject = projects.map((p) => {
-    const mix = emptyCaseMix();
-    for (const r of p.testRuns) {
-      if (r.testCases.length) {
-        for (const c of r.testCases) addCaseStatus(mix, c.status);
-      } else {
-        mix.total += r.totalTests;
-        mix.passed += r.passed;
-        mix.failed += r.failed;
-        mix.blocked += r.blocked;
-        mix.skipped += r.skipped;
-      }
+  const projectMix = new Map<
+    string,
+    {
+      id: string;
+      name: string;
+      status: string;
+      product: string | null;
+      mix: ReturnType<typeof emptyCaseMix>;
     }
-    return {
+  >();
+  for (const c of cases) {
+    const p = c.testRun.project;
+    const cur = projectMix.get(p.id) ?? {
       id: p.id,
       name: p.name,
       status: p.status,
       product: p.product,
-      totalTests: mix.total,
-      passed: mix.passed,
-      failed: mix.failed,
-      blocked: mix.blocked,
-      openDefects: p.defects.filter((d) => d.status !== DefectStatus.CLOSED).length,
+      mix: emptyCaseMix(),
     };
-  });
+    addCaseStatus(cur.mix, c.status);
+    projectMix.set(p.id, cur);
+  }
+  const projectIds = [...projectMix.keys()];
+  const projectDefects = projectIds.length
+    ? await prisma.defect.findMany({
+        where: { projectId: { in: projectIds } },
+        select: { projectId: true, status: true },
+      })
+    : [];
+  const openByProject = new Map<string, number>();
+  for (const d of projectDefects) {
+    if (d.status === DefectStatus.CLOSED) continue;
+    openByProject.set(d.projectId, (openByProject.get(d.projectId) ?? 0) + 1);
+  }
+  const byProject = [...projectMix.values()].map((p) => ({
+    id: p.id,
+    name: p.name,
+    status: p.status,
+    product: p.product,
+    totalTests: p.mix.total,
+    passed: p.mix.passed,
+    failed: p.mix.failed,
+    blocked: p.mix.blocked,
+    openDefects: openByProject.get(p.id) ?? 0,
+  }));
+
+  const moduleKey = (c: (typeof cases)[number]) => c.testRun.moduleId || c.moduleName || "";
+  const informativeModuleCount = new Set(cases.map(moduleKey).filter(Boolean)).size;
+  const testedModuleCount = new Set(cases.filter((c) => isExecutedStatus(c.status)).map(moduleKey).filter(Boolean)).size;
+  const coveragePct = informativeModuleCount ? Math.round((testedModuleCount / informativeModuleCount) * 100) : 0;
 
   const severityCounts = {
     CRITICAL: defects.filter((d) => d.severity === "CRITICAL").length,
@@ -164,7 +151,7 @@ export async function getDashboard(f: FilterQuery) {
   };
 
   return {
-    empty: totals.runs === 0,
+    empty: cases.length === 0,
     kpis: {
       totalTests: totals.totalTests,
       executedRuns: totals.runs,
@@ -203,41 +190,50 @@ export async function getCoverage(f: FilterQuery) {
     },
     include: {
       project: true,
-      testRuns: { orderBy: { executionDate: "desc" } },
+      testRuns: {
+        orderBy: { executionDate: "desc" },
+        include: { testCases: { where: listableCaseWhere(), select: { status: true } } },
+      },
       defects: true,
     },
   });
 
-  return modules.map((m) => {
-    const last = m.testRuns[0];
-    const total = m.testRuns.reduce((s, r) => s + r.totalTests, 0);
-    const passed = m.testRuns.reduce((s, r) => s + r.passed, 0);
-    const failed = m.testRuns.reduce((s, r) => s + r.failed, 0);
-    const blocked = m.testRuns.reduce((s, r) => s + r.blocked, 0);
-    const openDefects = m.defects.filter((d) => d.status !== DefectStatus.CLOSED).length;
-    let coverage: "stable" | "observations" | "failing" | "untested" = "untested";
-    if (!last) coverage = "untested";
-    else if (last.failed > 0 || m.defects.some((d) => d.severity === "CRITICAL" && d.status !== "CLOSED"))
-      coverage = "failing";
-    else if (last.blocked > 0 || openDefects > 0) coverage = "observations";
-    else coverage = "stable";
-    return {
-      projectId: m.projectId,
-      project: m.project.name,
-      moduleId: m.id,
-      module: m.name,
-      functionality: m.name,
-      tests: total,
-      lastRun: last?.executionDate ?? null,
-      lastResult: last?.status ?? "UNTESTED",
-      defects: openDefects,
-      passed,
-      failed,
-      blocked,
-      successPct: total ? Math.round((passed / total) * 100) : null,
-      coverage,
-    };
-  });
+  return modules
+    .map((m) => {
+      const executedRuns = m.testRuns.filter((r) => r.testCases.length > 0);
+      const last = executedRuns[0];
+      const total = executedRuns.reduce((s, r) => s + r.testCases.length, 0);
+      const passed = executedRuns.reduce((s, r) => s + r.testCases.filter((c) => c.status === CaseStatus.PASS).length, 0);
+      const failed = executedRuns.reduce((s, r) => s + r.testCases.filter((c) => c.status === CaseStatus.FAIL).length, 0);
+      const blocked = executedRuns.reduce(
+        (s, r) => s + r.testCases.filter((c) => c.status === CaseStatus.BLOCKED).length,
+        0,
+      );
+      const openDefects = m.defects.filter((d) => d.status !== DefectStatus.CLOSED).length;
+      let coverage: "stable" | "observations" | "failing" | "untested" = "untested";
+      if (!last) coverage = "untested";
+      else if (failed > 0 || m.defects.some((d) => d.severity === "CRITICAL" && d.status !== "CLOSED"))
+        coverage = "failing";
+      else if (blocked > 0 || openDefects > 0) coverage = "observations";
+      else coverage = "stable";
+      return {
+        projectId: m.projectId,
+        project: m.project.name,
+        moduleId: m.id,
+        module: m.name,
+        functionality: m.name,
+        tests: total,
+        lastRun: last?.executionDate ?? null,
+        lastResult: last?.status ?? "UNTESTED",
+        defects: openDefects,
+        passed,
+        failed,
+        blocked,
+        successPct: total ? Math.round((passed / total) * 100) : null,
+        coverage,
+      };
+    })
+    .filter((r) => r.tests > 0);
 }
 
 export async function searchAll(q: string) {
@@ -246,12 +242,22 @@ export async function searchAll(q: string) {
   const contains = { contains: term, mode: "insensitive" as const };
   const [testRuns, testCases, defects, evidence, reports, releases] = await Promise.all([
     prisma.testRun.findMany({
-      where: { OR: [{ tester: contains }, { observations: contains }, { version: contains }, { commit: contains }] },
+      where: {
+        AND: [
+          { testCases: { some: listableCaseWhere() } },
+          { OR: [{ tester: contains }, { observations: contains }, { version: contains }, { commit: contains }] },
+        ],
+      },
       take: 20,
       include: { project: true, module: true },
     }),
     prisma.testCase.findMany({
-      where: { OR: [{ title: contains }, { description: contains }, { externalId: contains }] },
+      where: {
+        AND: [
+          listableCaseWhere(),
+          { OR: [{ title: contains }, { description: contains }, { externalId: contains }] },
+        ],
+      },
       take: 20,
       include: { testRun: { include: { project: true } } },
     }),
@@ -276,5 +282,5 @@ export async function searchAll(q: string) {
   return { testRuns, testCases, defects, evidence, reports, releases };
 }
 
-export { runWhere };
+export { runListWhere } from "../lib/case-visibility.js";
 export { CaseStatus };
