@@ -5,6 +5,7 @@ export type ColumnRole =
   | "status"
   | "module"
   | "project"
+  | "product"
   | "tester"
   | "date"
   | "severity"
@@ -15,7 +16,20 @@ export type ColumnRole =
   | "commit"
   | "steps"
   | "expected"
+  | "expectedIntegration"
   | "actual"
+  | "functionality"
+  | "level"
+  | "automatable"
+  | "tool"
+  | "preconditions"
+  | "testData"
+  | "cycle"
+  | "reviewedBy"
+  | "observations"
+  | "evidenceUrl"
+  | "requirementRef"
+  | "sprint"
   | "ignore";
 
 export type HeaderMapping = {
@@ -32,6 +46,7 @@ export type ParsedCase = {
   status: string;
   module?: string;
   project?: string;
+  product?: string;
   tester?: string;
   date?: string;
   severity?: string;
@@ -41,8 +56,28 @@ export type ParsedCase = {
   version?: string;
   commit?: string;
   expected?: string;
+  expectedIntegration?: string;
   actual?: string;
+  functionality?: string;
+  level?: string;
+  automatable?: string;
+  tool?: string;
+  preconditions?: string;
+  testData?: string;
+  steps?: string;
+  cycle?: string;
+  reviewedBy?: string;
+  observations?: string;
+  evidenceUrl?: string;
+  requirementRef?: string;
+  sprint?: string;
   fingerprint: string;
+};
+
+export type CatalogItemParsed = {
+  category: string;
+  value: string;
+  sortOrder: number;
 };
 
 export type NarrativeMetrics = {
@@ -70,6 +105,7 @@ export type ParseResult = {
   testType?: string;
   headers: HeaderMapping[];
   cases: ParsedCase[];
+  catalog?: CatalogItemParsed[];
   metrics?: NarrativeMetrics;
   observations?: string;
   defects: Array<{

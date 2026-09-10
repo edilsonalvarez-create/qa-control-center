@@ -10,8 +10,9 @@ import {
 } from "@prisma/client";
 import { prisma } from "../lib/prisma.js";
 import { parseUpload, type ParseResult } from "../parsers/index.js";
-import { looksLikeCopy } from "../parsers/normalize.js";
+import { looksLikeCopy, mapEnvironment, mapTestType } from "../parsers/normalize.js";
 import crypto from "node:crypto";
+import type { ParsedCase } from "../parsers/types.js";
 
 const TEST_TYPES = new Set(Object.values(TestType));
 const ENVS = new Set(Object.values(Environment));
@@ -20,13 +21,15 @@ const SEV = new Set(Object.values(Severity));
 
 function asTestType(v?: string): TestType {
   if (!v) return TestType.UNKNOWN;
+  const mapped = mapTestType(v) as TestType;
+  if (TEST_TYPES.has(mapped) && mapped !== TestType.UNKNOWN) return mapped;
   const u = v.toUpperCase() as TestType;
   return TEST_TYPES.has(u) ? u : TestType.UNKNOWN;
 }
 function asEnv(v?: string): Environment {
   if (!v) return Environment.UNKNOWN;
-  const u = v.toUpperCase() as Environment;
-  return ENVS.has(u) ? u : Environment.UNKNOWN;
+  const mapped = mapEnvironment(v) as Environment;
+  return ENVS.has(mapped) ? mapped : Environment.UNKNOWN;
 }
 function asCase(v?: string): CaseStatus {
   if (!v) return CaseStatus.UNKNOWN;
@@ -189,55 +192,67 @@ function buildPreview(
     fileName,
     parsed,
     counts,
+    catalogCount: parsed.catalog?.length ?? 0,
     duplicates,
     requiresConfirmation: duplicates.length > 0,
     mapping: parsed.headers,
   };
 }
 
-export async function commitImport(jobId: string, userId: string, force = false) {
-  const job = await prisma.importJob.findUnique({
-    where: { id: jobId },
-    include: { sourceFile: true, duplicates: true },
+async function upsertCatalog(items?: ParseResult["catalog"]) {
+  if (!items?.length) return;
+  for (const item of items) {
+    await prisma.catalogItem.upsert({
+      where: { category_value: { category: item.category, value: item.value } },
+      update: { sortOrder: item.sortOrder },
+      create: { category: item.category, value: item.value, sortOrder: item.sortOrder },
+    });
+  }
+}
+
+async function ensureProject(name: string, product?: string) {
+  const existing = await prisma.project.findUnique({ where: { name } });
+  if (existing) return existing;
+  return prisma.project.create({
+    data: {
+      name,
+      client: name === "Unknown" ? "Unknown" : name,
+      product: product || (name === "SANOVA" ? "Unknown" : "HORUS Health"),
+      status: name === "Unknown" || name === "SANOVA" ? "REQUIRES_REVIEW" : "ACTIVE",
+      description: "Created from import. Requires review if name was inferred.",
+    },
   });
-  if (!job || !job.previewJson) throw Object.assign(new Error("Import job not found"), { statusCode: 404 });
-  if (job.status === "COMMITTED") throw Object.assign(new Error("Already committed"), { statusCode: 409 });
-  if (job.duplicates.length > 0 && !force) {
-    throw Object.assign(new Error("Duplicates detected. Review preview and commit with confirmDuplicates=true."), {
-      statusCode: 409,
-    });
-  }
+}
 
-  const preview = job.previewJson as ReturnType<typeof buildPreview>;
-  const parsed = preview.parsed as ParseResult;
-  const projectName = parsed.detectedProject ?? "Unknown";
-  let project = await prisma.project.findUnique({ where: { name: projectName } });
-  if (!project) {
-    project = await prisma.project.create({
-      data: {
-        name: projectName,
-        client: projectName === "Unknown" ? "Unknown" : projectName,
-        product: projectName === "SANOVA" ? "Unknown" : "HORUS Health",
-        status: projectName === "Unknown" || projectName === "SANOVA" ? "REQUIRES_REVIEW" : "ACTIVE",
-        description: "Created from import. Requires review if name was inferred.",
-      },
-    });
-  }
-
+async function persistRun(opts: {
+  projectName: string;
+  cases: ParsedCase[];
+  parsed: ParseResult;
+  job: {
+    id: string;
+    sourceFileId: string | null;
+    sourceFile: { id: string; fileName: string; sourceUrl: string | null; contentHash: string | null } | null;
+  };
+  extraDefects: ParseResult["defects"];
+}) {
+  const { projectName, cases, parsed, job, extraDefects } = opts;
+  const project = await ensureProject(projectName, cases.find((c) => c.product)?.product);
+  const defaultModuleName = cases.find((c) => c.module)?.module ?? parsed.detectedModule;
   let moduleId: string | undefined;
-  if (parsed.detectedModule) {
+  if (defaultModuleName) {
     const mod = await prisma.module.upsert({
-      where: { projectId_name: { projectId: project.id, name: parsed.detectedModule } },
+      where: { projectId_name: { projectId: project.id, name: defaultModuleName } },
       update: {},
-      create: { projectId: project.id, name: parsed.detectedModule },
+      create: { projectId: project.id, name: defaultModuleName },
     });
     moduleId = mod.id;
   }
 
-  const counts = preview.counts;
-  const failed = counts.failed ?? 0;
-  const blocked = counts.blocked ?? 0;
-  const passed = counts.passed ?? 0;
+  const passed = cases.filter((c) => c.status === "PASS").length;
+  const failed = cases.filter((c) => c.status === "FAIL").length;
+  const blocked = cases.filter((c) => c.status === "BLOCKED").length;
+  const skipped = cases.filter((c) => c.status === "SKIPPED").length;
+  const total = cases.length || (parsed.metrics?.totalTests ?? 0);
   const status: RunStatus =
     failed > 0
       ? RunStatus.FAILED
@@ -247,31 +262,36 @@ export async function commitImport(jobId: string, userId: string, force = false)
           ? RunStatus.PASSED
           : RunStatus.UNKNOWN;
 
-  const execDate = parsed.detectedDate ? new Date(parsed.detectedDate) : new Date();
+  const dateRaw = cases.find((c) => c.date)?.date ?? parsed.detectedDate;
+  const execDate = dateRaw ? new Date(dateRaw) : new Date();
+  const tester = cases.find((c) => c.tester)?.tester ?? parsed.detectedTester ?? "Unknown";
+  const version = cases.find((c) => c.version)?.version;
+  const environment = asEnv(cases.find((c) => c.environment)?.environment ?? parsed.detectedEnvironment);
 
   const run = await prisma.testRun.create({
     data: {
       projectId: project.id,
       moduleId,
-      testType: asTestType(parsed.testType),
-      environment: asEnv(parsed.detectedEnvironment),
+      testType: asTestType(cases.find((c) => c.type)?.type ?? parsed.testType),
+      environment,
       executionDate: Number.isNaN(execDate.getTime()) ? new Date() : execDate,
-      tester: parsed.detectedTester ?? "Unknown",
-      totalTests: counts.total,
-      passed: counts.passed,
-      failed: counts.failed,
-      blocked: counts.blocked,
-      skipped: counts.skipped,
+      tester,
+      version,
+      totalTests: total,
+      passed: cases.length ? passed : (parsed.metrics?.passed ?? 0),
+      failed: cases.length ? failed : (parsed.metrics?.failed ?? 0),
+      blocked: cases.length ? blocked : (parsed.metrics?.blocked ?? 0),
+      skipped: cases.length ? skipped : (parsed.metrics?.skipped ?? 0),
       status,
       observations: parsed.observations,
       sourceFileId: job.sourceFileId,
-      fingerprint: `${project.name}|${parsed.detectedModule ?? ""}|${job.sourceFile?.contentHash ?? ""}`,
+      fingerprint: `${project.name}|${defaultModuleName ?? ""}|${job.sourceFile?.contentHash ?? ""}`,
     },
   });
 
-  for (const c of parsed.cases) {
+  for (const c of cases) {
     let caseModuleId = moduleId;
-    if (c.module && c.module !== parsed.detectedModule) {
+    if (c.module) {
       const m = await prisma.module.upsert({
         where: { projectId_name: { projectId: project.id, name: c.module } },
         update: {},
@@ -290,6 +310,28 @@ export async function commitImport(jobId: string, userId: string, force = false)
         status: asCase(c.status),
         executionDate: c.date && !Number.isNaN(new Date(c.date).getTime()) ? new Date(c.date) : run.executionDate,
         fingerprint: c.fingerprint,
+        moduleName: c.module,
+        product: c.product,
+        functionality: c.functionality,
+        level: c.level,
+        automatable: c.automatable,
+        tool: c.tool,
+        preconditions: c.preconditions,
+        testData: c.testData,
+        steps: c.steps,
+        expected: c.expected,
+        expectedIntegration: c.expectedIntegration,
+        actual: c.actual,
+        environment: c.environment,
+        cycle: c.cycle,
+        executor: c.tester,
+        reviewedBy: c.reviewedBy,
+        observations: c.observations,
+        evidenceUrl: c.evidenceUrl,
+        requirementRef: c.requirementRef,
+        release: c.version,
+        sprint: c.sprint,
+        severity: c.severity,
       },
     });
     if (c.status === "FAIL") {
@@ -307,9 +349,21 @@ export async function commitImport(jobId: string, userId: string, force = false)
         },
       });
     }
+    if (c.evidenceUrl) {
+      await prisma.evidence.create({
+        data: {
+          testRunId: run.id,
+          testCaseId: created.id,
+          type: "OTHER",
+          fileName: "Evidencia",
+          fileUrl: c.evidenceUrl,
+          description: "Evidence link from matrix",
+        },
+      });
+    }
   }
 
-  for (const d of parsed.defects) {
+  for (const d of extraDefects) {
     const exists = await prisma.defect.findFirst({
       where: { testRunId: run.id, title: d.title },
     });
@@ -356,6 +410,53 @@ export async function commitImport(jobId: string, userId: string, force = false)
     }
   }
 
+  return run;
+}
+
+export async function commitImport(jobId: string, userId: string, force = false) {
+  const job = await prisma.importJob.findUnique({
+    where: { id: jobId },
+    include: { sourceFile: true, duplicates: true },
+  });
+  if (!job || !job.previewJson) throw Object.assign(new Error("Import job not found"), { statusCode: 404 });
+  if (job.status === "COMMITTED") throw Object.assign(new Error("Already committed"), { statusCode: 409 });
+  if (job.duplicates.length > 0 && !force) {
+    throw Object.assign(new Error("Duplicates detected. Review preview and commit with confirmDuplicates=true."), {
+      statusCode: 409,
+    });
+  }
+
+  const preview = job.previewJson as ReturnType<typeof buildPreview>;
+  const parsed = preview.parsed as ParseResult;
+  await upsertCatalog(parsed.catalog);
+
+  const groups = new Map<string, ParsedCase[]>();
+  for (const c of parsed.cases) {
+    const name = c.project || parsed.detectedProject || "Unknown";
+    const list = groups.get(name) ?? [];
+    list.push(c);
+    groups.set(name, list);
+  }
+  const hasNarrative =
+    Boolean(parsed.metrics?.totalTests) || parsed.defects.length > 0;
+  if (!groups.size && hasNarrative) {
+    groups.set(parsed.detectedProject ?? "Unknown", []);
+  }
+
+  const runIds: string[] = [];
+  const entries = [...groups.entries()];
+  for (const [index, [projectName, cases]] of entries.entries()) {
+    const extraDefects = index === 0 && !parsed.cases.length ? parsed.defects : [];
+    const run = await persistRun({
+      projectName,
+      cases,
+      parsed,
+      job,
+      extraDefects,
+    });
+    runIds.push(run.id);
+  }
+
   await prisma.importJob.update({
     where: { id: job.id },
     data: { status: "COMMITTED", committedAt: new Date() },
@@ -365,10 +466,10 @@ export async function commitImport(jobId: string, userId: string, force = false)
       userId,
       action: "IMPORT_COMMIT",
       entity: "TestRun",
-      entityId: run.id,
-      payload: { jobId: job.id, force },
+      entityId: runIds[0],
+      payload: { jobId: job.id, force, runIds },
     },
   });
 
-  return { runId: run.id, jobId: job.id };
+  return { runId: runIds[0], runIds, jobId: job.id };
 }

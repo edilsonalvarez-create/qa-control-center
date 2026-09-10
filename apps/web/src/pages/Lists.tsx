@@ -69,6 +69,7 @@ export function CasesPage() {
   const { query } = useFilters();
   const { rows, error } = useApiList<any>(`/api/v1/test-cases${toQuery(query)}`, [query]);
   if (error) return <p className="text-rose-500">{error}</p>;
+  if (!rows.length) return <EmptyState title="Sin casos" hint="Importa una matriz desde Import Center." />;
   return (
     <div className="card overflow-x-auto">
       <h2 className="mb-3 text-xl font-bold">Test Cases</h2>
@@ -76,20 +77,34 @@ export function CasesPage() {
         <thead>
           <tr className="text-left text-slate-500">
             <th>ID</th>
+            <th>Cliente / Proyecto</th>
+            <th>Módulo</th>
             <th>Título</th>
-            <th>Proyecto</th>
+            <th>Tipo</th>
+            <th>Prioridad</th>
             <th>Estado</th>
+            <th>Ejecutor</th>
+            <th>Fecha</th>
           </tr>
         </thead>
         <tbody>
           {rows.map((c) => (
             <tr key={c.id} className="border-t border-slate-200 dark:border-slate-800">
               <td className="py-2">{c.externalId ?? "—"}</td>
-              <td>{c.title}</td>
-              <td>{c.testRun?.project?.name}</td>
+              <td>{c.testRun?.project?.name ?? "—"}</td>
+              <td>{c.moduleName ?? c.testRun?.module?.name ?? "—"}</td>
+              <td>
+                <Link className="text-cyan-700 dark:text-cyan-400" to={`/runs/${c.testRun?.id}`}>
+                  {c.title}
+                </Link>
+              </td>
+              <td>{c.type}</td>
+              <td>{c.priority ?? "—"}</td>
               <td>
                 <StatusBadge value={c.status} />
               </td>
+              <td>{c.executor ?? c.testRun?.tester ?? "—"}</td>
+              <td>{c.executionDate ? new Date(c.executionDate).toLocaleDateString() : "—"}</td>
             </tr>
           ))}
         </tbody>

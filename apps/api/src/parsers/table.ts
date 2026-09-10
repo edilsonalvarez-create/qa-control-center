@@ -1,6 +1,6 @@
 import { isLikelyHeaderRow, mapHeader, mappedCell, pickHeader } from "./columns.js";
-import { fingerprint, inferFromFileName, mapStatus, normalizeText } from "./normalize.js";
-import type { HeaderMapping, ParsedCase, ParseResult, ParseWarning } from "./types.js";
+import { fingerprint, inferFromFileName, mapStatus, normalizeProjectName, normalizeText } from "./normalize.js";
+import type { CatalogItemParsed, HeaderMapping, ParsedCase, ParseResult, ParseWarning } from "./types.js";
 
 export function scoreHeaderRow(cells: string[]): number {
   const joined = cells.join(" ").toLowerCase();
@@ -12,10 +12,21 @@ export function scoreHeaderRow(cells: string[]): number {
   return mapped + (hasEstado ? 25 : 0) + (hasTitle ? 8 : 0);
 }
 
+export function isSkippedSheetName(name: string): boolean {
+  const n = name
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/\p{Diacritic}/gu, "");
+  return /dashboard|trazabilidad|^defectos$|lista de defectos/.test(n);
+}
+
 export function scoreSheetName(name: string): number {
   const n = name.toLowerCase();
-  if (/dashboard|resumen|m[eé]trica|hallazgo|flujo|cobertura/.test(n)) return -40;
+  if (isSkippedSheetName(name)) return -80;
+  if (/resumen|m[eé]trica|hallazgo|flujo|cobertura/.test(n)) return -40;
+  if (/casos de prueba/.test(n)) return 40;
   if (/matriz/.test(n)) return 30;
+  if (/catalog/.test(n)) return -20;
   return 0;
 }
 
@@ -83,18 +94,20 @@ export function parseCaseRows(rows: string[][], fileName: string, sourcePath?: s
     if (pickHeader(headers, "externalId") && !get("externalId")) continue;
     const title = get("title") || get("externalId");
     if (!title) continue;
-    const project = get("project") || inferred.project;
+    const project = normalizeProjectName(get("project")) || inferred.project;
     const moduleName = get("module") || inferred.moduleName;
     const date = get("date");
     const version = get("version");
     const status = mapStatus(get("status"));
+    const steps = get("steps") || undefined;
     cases.push({
       externalId: get("externalId") || undefined,
       title: title || "Requires review",
-      description: get("description") || get("steps") || undefined,
+      description: get("description") || get("preconditions") || steps || undefined,
       status,
       module: moduleName,
       project,
+      product: get("product") || undefined,
       tester: get("tester") || undefined,
       date: date || undefined,
       severity: get("severity") || undefined,
@@ -104,7 +117,21 @@ export function parseCaseRows(rows: string[][], fileName: string, sourcePath?: s
       version: version || undefined,
       commit: get("commit") || undefined,
       expected: get("expected") || undefined,
+      expectedIntegration: get("expectedIntegration") || undefined,
       actual: get("actual") || undefined,
+      functionality: get("functionality") || undefined,
+      level: get("level") || undefined,
+      automatable: get("automatable") || undefined,
+      tool: get("tool") || undefined,
+      preconditions: get("preconditions") || undefined,
+      testData: get("testData") || undefined,
+      steps,
+      cycle: get("cycle") || undefined,
+      reviewedBy: get("reviewedBy") || undefined,
+      observations: get("observations") || undefined,
+      evidenceUrl: get("evidenceUrl") || undefined,
+      requirementRef: get("requirementRef") || undefined,
+      sprint: get("sprint") || undefined,
       fingerprint: fingerprint([project, moduleName, title, date, version]),
     });
   }
@@ -117,13 +144,16 @@ export function toParseResult(
   fileName: string,
   parsed: { headers: HeaderMapping[]; cases: ParsedCase[]; warnings: ParseWarning[] },
   sourcePath?: string,
+  catalog?: CatalogItemParsed[],
 ): ParseResult {
   const inferred = inferFromFileName(fileName, sourcePath);
   const cases = parsed.cases;
+  const firstProject = cases.find((c) => c.project)?.project ?? inferred.project;
   return {
     fileType,
     headers: parsed.headers,
     cases,
+    catalog: catalog?.length ? catalog : undefined,
     defects: cases
       .filter((c) => c.status === "FAIL")
       .map((c) => ({
@@ -134,9 +164,9 @@ export function toParseResult(
       })),
     warnings: parsed.warnings,
     testType: inferred.testType,
-    detectedProject: inferred.project,
-    detectedModule: inferred.moduleName,
-    detectedEnvironment: inferred.environment,
+    detectedProject: firstProject,
+    detectedModule: cases.find((c) => c.module)?.module || inferred.moduleName,
+    detectedEnvironment: cases.find((c) => c.environment)?.environment || inferred.environment,
     detectedTester: cases.find((c) => c.tester)?.tester,
     detectedDate: cases.find((c) => c.date)?.date,
   };

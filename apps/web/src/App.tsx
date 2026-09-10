@@ -7,6 +7,7 @@ import { ImportPage } from "./pages/ImportPage";
 import { LoginPage } from "./pages/LoginPage";
 import { RunDetailPage } from "./pages/RunDetailPage";
 import { SettingsPage } from "./pages/SettingsPage";
+import { CatalogPage } from "./pages/CatalogPage";
 import {
   CasesPage,
   CoveragePage,
@@ -42,6 +43,7 @@ export default function App() {
         <Route path="runs" element={<RunsPage />} />
         <Route path="runs/:id" element={<RunDetailPage />} />
         <Route path="cases" element={<CasesPage />} />
+        <Route path="catalog" element={<CatalogPage />} />
         <Route path="defects" element={<DefectsPage />} />
         <Route path="coverage" element={<CoveragePage />} />
         <Route path="evidence" element={<EvidencePage />} />

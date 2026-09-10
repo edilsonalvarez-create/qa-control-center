@@ -23,7 +23,9 @@ export function mapStatus(raw: string | undefined): string {
   const n = normalizeKey(raw ?? "");
   if (!n) return "UNKNOWN";
   if (
-    /\b(no (cumple|cumplio|ok|pasa|paso|exitoso|exitosa)|fallid[oa]|fallo|failed|fail|error|reprobado|nok)\b/.test(n)
+    /\b(no (cumple|cumplio|ok|pasa|paso|exitoso|exitosa)|fallid[oa]|falla|fallo|failed|fail|error|reprobado|nok)\b/.test(
+      n,
+    )
   ) {
     return "FAIL";
   }
@@ -38,6 +40,17 @@ export function mapStatus(raw: string | undefined): string {
   if (/\b(skip|skipped|omitid[oa]|n a|na|no aplica)\b/.test(n)) return "SKIPPED";
   if (/\b(pendiente|no ejecutad[oa]|por ejecutar|sin ejecutar|en progreso|en ejecucion)\b/.test(n)) return "UNKNOWN";
   return "REQUIRES_REVIEW";
+}
+
+export function normalizeProjectName(raw: string | undefined): string | undefined {
+  if (!raw?.trim()) return undefined;
+  const n = normalizeKey(raw);
+  if (/\bsumi\b/.test(n) || n.includes("sumimedical")) return "SUMIMEDICAL";
+  if (n.includes("medicina integral") || n.includes("horus m i")) return "MEDICINA INTEGRAL";
+  if (n.includes("ferro")) return "FERROCARRILES";
+  if (n.includes("sanova")) return "SANOVA";
+  if (n.includes("fomag")) return "FOMAG";
+  return raw.replace(/\s+/g, " ").trim();
 }
 
 export function mapSeverity(raw: string | undefined): string {
@@ -58,6 +71,23 @@ export function mapEnvironment(raw: string | undefined): string {
   if (/\btest\b/.test(n)) return "TEST";
   if (/stag/.test(n)) return "STAGING";
   if (/prod|produccion/.test(n)) return "PROD";
+  return "UNKNOWN";
+}
+
+export function mapTestType(raw: string | undefined): string {
+  const n = normalizeKey(raw ?? "");
+  if (!n) return "UNKNOWN";
+  if (/unitari|unit\b/.test(n)) return "UNIT";
+  if (/integr/.test(n)) return "INTEGRATION";
+  if (/\be2e\b|extremo a extremo|end to end/.test(n)) return "E2E";
+  if (/\bapi\b/.test(n)) return "API";
+  if (/perform|rendimiento|carga/.test(n)) return "PERFORMANCE";
+  if (/segurid|security/.test(n)) return "SECURITY";
+  if (/rtm/.test(n)) return "RTM";
+  if (/limite|boundary/.test(n)) return "BOUNDARY";
+  if (/regres/.test(n)) return "REGRESSION";
+  if (/\bsmoke\b|humo/.test(n)) return "SMOKE";
+  if (/funcional|functional/.test(n)) return "FUNCTIONAL";
   return "UNKNOWN";
 }
 
@@ -116,6 +146,7 @@ function projectFromNameHints(text: string): string | undefined {
   if (n.includes("medicina") || n.includes("m.i") || n.includes("horus-m.i")) project = "MEDICINA INTEGRAL";
   if (n.includes("ferro")) project = "FERROCARRILES";
   if (n.includes("sanova")) project = "SANOVA";
+  if (n.includes("fomag")) project = "FOMAG";
   return project;
 }
 

@@ -178,4 +178,8 @@ export async function domainRoutes(app: FastifyInstance) {
   app.get("/api/v1/source-files", { preHandler: [app.authenticate] }, async () => {
     return prisma.sourceFile.findMany({ include: { project: true }, orderBy: { createdAt: "desc" } });
   });
+
+  app.get("/api/v1/catalog", { preHandler: [app.authenticate] }, async () => {
+    return prisma.catalogItem.findMany({ orderBy: [{ category: "asc" }, { sortOrder: "asc" }, { value: "asc" }] });
+  });
 }

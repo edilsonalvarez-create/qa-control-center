@@ -1,7 +1,8 @@
 import ExcelJS from "exceljs";
+import { isCatalogSheetName, parseCatalogRows } from "./catalog.js";
 import { inferFromFileName } from "./normalize.js";
-import { parseCaseRows, scoreHeaderRow, scoreSheetName, toParseResult } from "./table.js";
-import type { ParseResult } from "./types.js";
+import { isSkippedSheetName, parseCaseRows, scoreHeaderRow, scoreSheetName, toParseResult } from "./table.js";
+import type { CatalogItemParsed, ParseResult } from "./types.js";
 
 function cellStr(value: ExcelJS.CellValue): string {
   if (value == null) return "";
@@ -15,7 +16,9 @@ function cellStr(value: ExcelJS.CellValue): string {
       result?: ExcelJS.CellValue;
       richText?: Array<{ text?: string }>;
       hyperlink?: string;
+      formula?: string;
     };
+    if (o.hyperlink) return String(o.hyperlink);
     if (Array.isArray(o.richText)) return o.richText.map((t) => t.text ?? "").join("");
     if (o.text != null && o.text !== "") return String(o.text);
     if (o.result != null) return cellStr(o.result);
@@ -53,9 +56,15 @@ export async function parseExcel(buffer: Buffer, fileName: string, sourcePath?: 
     };
   }
 
+  let catalog: CatalogItemParsed[] = [];
   let best: { rows: string[][]; score: number; name: string } | undefined;
   for (const sheet of wb.worksheets) {
     const rows = sheetRows(sheet);
+    if (isCatalogSheetName(sheet.name)) {
+      catalog = parseCatalogRows(rows);
+      continue;
+    }
+    if (isSkippedSheetName(sheet.name)) continue;
     const rowScore = rows.reduce((max, row) => Math.max(max, scoreHeaderRow(row)), -1);
     if (rowScore < 0) continue;
     const score = rowScore + scoreSheetName(sheet.name);
@@ -67,6 +76,7 @@ export async function parseExcel(buffer: Buffer, fileName: string, sourcePath?: 
       fileType: "xlsx",
       headers: [],
       cases: [],
+      catalog: catalog.length ? catalog : undefined,
       defects: [],
       warnings: [
         {
@@ -81,11 +91,17 @@ export async function parseExcel(buffer: Buffer, fileName: string, sourcePath?: 
   }
 
   const parsed = parseCaseRows(best.rows, fileName, sourcePath);
-  const result = toParseResult("xlsx", fileName, parsed, sourcePath);
+  const result = toParseResult("xlsx", fileName, parsed, sourcePath, catalog);
   if (best.name && wb.worksheets[0]?.name !== best.name) {
     result.warnings.push({
       code: "SHEET_SELECTED",
       message: `Read cases from sheet "${best.name}" because it contained the Estado/matrix headers.`,
+    });
+  }
+  if (catalog.length) {
+    result.warnings.push({
+      code: "CATALOG_PARSED",
+      message: `Read ${catalog.length} catalog values from the Catalogos sheet.`,
     });
   }
   return result;

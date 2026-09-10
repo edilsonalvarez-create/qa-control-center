@@ -1,6 +1,7 @@
 import { NavLink, Outlet, useNavigate } from "react-router-dom";
 import {
   Activity,
+  BookOpen,
   Bug,
   Calendar,
   ClipboardList,
@@ -25,6 +26,7 @@ const links = [
   { to: "/", label: "Dashboard", icon: LayoutDashboard },
   { to: "/runs", label: "Test Runs", icon: ClipboardList },
   { to: "/cases", label: "Test Cases", icon: Layers },
+  { to: "/catalog", label: "Catálogo", icon: BookOpen },
   { to: "/defects", label: "Defects", icon: Bug },
   { to: "/coverage", label: "Coverage", icon: Shield },
   { to: "/evidence", label: "Evidence", icon: FolderOpen },

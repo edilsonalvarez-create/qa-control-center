@@ -19,6 +19,7 @@ const SYNONYMS: Record<ColumnRole, string[]> = {
   title: [
     "titulo",
     "título",
+    "titulo del caso",
     "titulo del caso de prueba",
     "título del caso de prueba",
     "title",
@@ -30,7 +31,7 @@ const SYNONYMS: Record<ColumnRole, string[]> = {
     "descripcion del caso",
     "descripción del caso",
   ],
-  description: ["descripcion", "descripción", "description", "detalle", "precondicion", "precondición"],
+  description: ["descripcion", "descripción", "description", "detalle"],
   status: [
     "estado",
     "estado del caso",
@@ -38,7 +39,6 @@ const SYNONYMS: Record<ColumnRole, string[]> = {
     "estado de ejecucion",
     "estado del test",
     "estado test",
-    "estado de ejecucion",
     "estado de ejecución",
     "status",
     "pass/fail",
@@ -46,22 +46,39 @@ const SYNONYMS: Record<ColumnRole, string[]> = {
     "outcome",
     "resultado",
     "result",
-    "ejecucion",
-    "ejecución",
   ],
-  module: ["modulo", "módulo", "module", "funcionalidad", "componente", "feature"],
+  module: ["modulo", "módulo", "module", "modulo / componente", "componente", "feature"],
   project: ["proyecto", "project", "cliente", "client", "aplicacion", "aplicación"],
-  tester: ["qa", "tester", "responsable", "ejecutado por", "analista", "owner"],
+  product: ["proyecto / producto", "producto", "product"],
+  tester: ["qa", "tester", "responsable", "ejecutado por", "analista", "owner", "ejecutor"],
   date: ["fecha", "date", "execution date", "fecha ejecucion", "fecha ejecución", "fecha de prueba"],
-  severity: ["severidad", "severity", "gravedad"],
+  severity: ["severidad", "severity", "gravedad", "severidad si falla"],
   priority: ["prioridad", "priority"],
   type: ["tipo", "type", "tipo de prueba", "test type"],
-  environment: ["ambiente", "environment", "env", "entorno"],
-  version: ["version", "versión", "build", "release"],
+  environment: ["ambiente", "environment", "env", "entorno", "entorno ejecutado"],
+  version: ["version", "versión", "build", "release", "release / build"],
   commit: ["commit", "sha", "revision", "revisión"],
-  steps: ["pasos", "steps", "procedimiento"],
+  steps: ["pasos", "steps", "procedimiento", "pasos de ejecucion"],
   expected: ["esperado", "expected", "resultado esperado"],
+  expectedIntegration: [
+    "resultado esperado sistema destino",
+    "resultado esperado (sistema destino / integracion)",
+    "esperado integracion",
+    "expected integration",
+  ],
   actual: ["obtenido", "actual", "resultado obtenido", "resultado real"],
+  functionality: ["funcionalidad", "functionality"],
+  level: ["nivel", "level"],
+  automatable: ["automatizable", "automatable"],
+  tool: ["herramienta", "tool"],
+  preconditions: ["precondicion", "precondición", "precondiciones"],
+  testData: ["datos de prueba", "test data", "datos"],
+  cycle: ["ciclo", "cycle"],
+  reviewedBy: ["revisado por", "revisado por qa lead", "reviewed by"],
+  observations: ["observaciones", "observacion", "notes", "notas"],
+  evidenceUrl: ["evidencia", "evidencia link", "evidence"],
+  requirementRef: ["requisito", "hu", "ticket", "requisito / hu / ticket"],
+  sprint: ["sprint", "iteracion", "sprint / iteracion"],
   ignore: [],
 };
 
@@ -71,6 +88,7 @@ function norm(s: string) {
     .normalize("NFD")
     .replace(/\p{Diacritic}/gu, "")
     .replace(/[_./\\-]+/g, " ")
+    .replace(/[()]/g, " ")
     .replace(/\s+/g, " ")
     .trim();
 }
@@ -79,6 +97,10 @@ export function mapHeader(header: string): { role: ColumnRole; confidence: numbe
   const n = norm(header);
   if (!n) return { role: "ignore", confidence: 0 };
   if (n === "estado" || n.startsWith("estado ")) return { role: "status", confidence: 1 };
+  if (n === "titulo del caso") return { role: "title", confidence: 1 };
+  if (n === "cliente") return { role: "project", confidence: 1 };
+  if (n.includes("producto")) return { role: "product", confidence: 1 };
+  if (n === "id defecto") return { role: "ignore", confidence: 0 };
   let best: { role: ColumnRole; confidence: number } = { role: "ignore", confidence: 0 };
   for (const [role, list] of Object.entries(SYNONYMS) as [ColumnRole, string[]][]) {
     if (role === "ignore") continue;

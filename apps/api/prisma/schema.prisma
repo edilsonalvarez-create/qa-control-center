@@ -189,23 +189,57 @@ model TestRun {
 }
 
 model TestCase {
-  id            String        @id @default(cuid())
-  testRunId     String
-  testRun       TestRun       @relation(fields: [testRunId], references: [id], onDelete: Cascade)
-  requirementId String?
-  requirement   Requirement?  @relation(fields: [requirementId], references: [id])
-  externalId    String?
-  title         String
-  description   String?
-  type          TestType      @default(UNKNOWN)
-  priority      String?
-  status        CaseStatus    @default(UNKNOWN)
-  executionDate DateTime?
-  fingerprint   String?
-  defects       Defect[]
-  evidence      Evidence[]
+  id                   String       @id @default(cuid())
+  testRunId            String
+  testRun              TestRun      @relation(fields: [testRunId], references: [id], onDelete: Cascade)
+  requirementId        String?
+  requirement          Requirement? @relation(fields: [requirementId], references: [id])
+  externalId           String?
+  title                String
+  description          String?
+  type                 TestType     @default(UNKNOWN)
+  priority             String?
+  status               CaseStatus   @default(UNKNOWN)
+  executionDate        DateTime?
+  fingerprint          String?
+  moduleName           String?
+  product              String?
+  functionality        String?
+  level                String?
+  automatable          String?
+  tool                 String?
+  preconditions        String?
+  testData             String?
+  steps                String?
+  expected             String?
+  expectedIntegration  String?
+  actual               String?
+  environment          String?
+  cycle                String?
+  executor             String?
+  reviewedBy           String?
+  observations         String?
+  evidenceUrl          String?
+  requirementRef       String?
+  release              String?
+  sprint               String?
+  severity             String?
+  defects              Defect[]
+  evidence             Evidence[]
 
   @@index([fingerprint])
+}
+
+model CatalogItem {
+  id        String   @id @default(cuid())
+  category  String
+  value     String
+  sortOrder Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([category, value])
+  @@index([category])
 }
 
 model Defect {

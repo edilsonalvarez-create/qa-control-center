@@ -81,10 +81,13 @@ export function ImportPage() {
       {preview && (
         <div className="card space-y-3">
           <h3 className="font-semibold">Vista previa — {preview.sourceFile?.fileName}</h3>
-          <p className="text-sm">
-            Proyecto: {parsed?.detectedProject ?? "Unknown"} · Módulo: {parsed?.detectedModule ?? "Unknown"} · Tipo:{" "}
-            {parsed?.testType ?? "UNKNOWN"}
-          </p>
+            <p className="text-sm">
+              Proyecto: {parsed?.detectedProject ?? "Unknown"} · Módulo: {parsed?.detectedModule ?? "Unknown"} · Tipo:{" "}
+              {parsed?.testType ?? "UNKNOWN"}
+              {preview?.previewJson?.catalogCount
+                ? ` · Catálogo ${preview.previewJson.catalogCount} valores`
+                : ""}
+            </p>
           {counts && (
             <p className="text-sm">
               total {counts.total} · PASS {counts.passed} · FAIL {counts.failed} · BLOCKED {counts.blocked} · SKIPPED{" "}

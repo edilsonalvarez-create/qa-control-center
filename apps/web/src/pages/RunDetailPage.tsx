@@ -70,8 +70,72 @@ export function RunDetailPage() {
             </thead>
             <tbody>
               {run.testCases?.map((c: any) => (
-                <tr key={c.id} className="border-t border-slate-200 dark:border-slate-800">
-                  <td className="py-2">{c.externalId ? `${c.externalId} · ` : ""}{c.title}</td>
+                <tr key={c.id} className="border-t border-slate-200 align-top dark:border-slate-800">
+                  <td className="py-2">
+                    <p className="font-medium">
+                      {c.externalId ? `${c.externalId} · ` : ""}
+                      {c.title}
+                    </p>
+                    <dl className="mt-2 space-y-1 text-xs text-slate-600 dark:text-slate-300">
+                      {c.preconditions && (
+                        <div>
+                          <dt className="font-semibold">Precondiciones</dt>
+                          <dd className="whitespace-pre-wrap">{c.preconditions}</dd>
+                        </div>
+                      )}
+                      {c.testData && (
+                        <div>
+                          <dt className="font-semibold">Datos de prueba</dt>
+                          <dd className="whitespace-pre-wrap">{c.testData}</dd>
+                        </div>
+                      )}
+                      {c.steps && (
+                        <div>
+                          <dt className="font-semibold">Pasos</dt>
+                          <dd className="whitespace-pre-wrap">{c.steps}</dd>
+                        </div>
+                      )}
+                      {c.expected && (
+                        <div>
+                          <dt className="font-semibold">Esperado</dt>
+                          <dd className="whitespace-pre-wrap">{c.expected}</dd>
+                        </div>
+                      )}
+                      {c.expectedIntegration && (
+                        <div>
+                          <dt className="font-semibold">Esperado integración</dt>
+                          <dd className="whitespace-pre-wrap">{c.expectedIntegration}</dd>
+                        </div>
+                      )}
+                      {c.actual && (
+                        <div>
+                          <dt className="font-semibold">Obtenido</dt>
+                          <dd className="whitespace-pre-wrap">{c.actual}</dd>
+                        </div>
+                      )}
+                      {c.observations && (
+                        <div>
+                          <dt className="font-semibold">Observaciones</dt>
+                          <dd className="whitespace-pre-wrap">{c.observations}</dd>
+                        </div>
+                      )}
+                      {c.evidenceUrl && (
+                        <div>
+                          <dt className="font-semibold">Evidencia</dt>
+                          <dd>
+                            <a
+                              className="text-cyan-700 dark:text-cyan-400"
+                              href={c.evidenceUrl}
+                              target="_blank"
+                              rel="noreferrer"
+                            >
+                              {c.evidenceUrl}
+                            </a>
+                          </dd>
+                        </div>
+                      )}
+                    </dl>
+                  </td>
                   <td>
                     <StatusBadge value={c.status} />
                   </td>

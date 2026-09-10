@@ -9,6 +9,7 @@ import {
   inferFromFileName,
   looksLikeCopy,
   mapStatus,
+  normalizeProjectName,
 } from "../src/parsers/normalize.js";
 
 describe("header detection", () => {
@@ -25,6 +26,17 @@ describe("header detection", () => {
     expect(mapHeader("Módulo").role).toBe("module");
     expect(mapHeader("Fecha ejecución").role).toBe("date");
     expect(mapHeader("Responsable").role).toBe("tester");
+    expect(mapHeader("Título del Caso").role).toBe("title");
+    expect(mapHeader("Cliente").role).toBe("project");
+    expect(mapHeader("Proyecto / Producto").role).toBe("product");
+    expect(mapHeader("Funcionalidad").role).toBe("functionality");
+    expect(mapHeader("Nivel").role).toBe("level");
+    expect(mapHeader("Automatizable").role).toBe("automatable");
+    expect(mapHeader("Precondiciones").role).toBe("preconditions");
+    expect(mapHeader("Datos de Prueba").role).toBe("testData");
+    expect(mapHeader("Pasos").role).toBe("steps");
+    expect(mapHeader("Resultado Esperado (Sistema Destino)").role).toBe("expectedIntegration");
+    expect(mapHeader("ID Defecto").role).toBe("ignore");
   });
 
   it("does not invent a role for unrelated columns", () => {
@@ -42,6 +54,10 @@ describe("status and metrics", () => {
     expect(mapStatus("No ejecutado")).toBe("UNKNOWN");
     expect(mapStatus("Pasó")).toBe("PASS");
     expect(mapStatus("Falló")).toBe("FAIL");
+    expect(mapStatus("Pasa")).toBe("PASS");
+    expect(mapStatus("Falla")).toBe("FAIL");
+    expect(mapStatus("Bloqueado")).toBe("BLOCKED");
+    expect(mapStatus("N/A")).toBe("SKIPPED");
     expect(mapStatus("")).toBe("UNKNOWN");
     expect(mapStatus("maybe later")).toBe("REQUIRES_REVIEW");
   });
@@ -72,7 +88,7 @@ FIX-002,FIXTURE login inválido,Login,FAIL,2026-08-01`;
     expect(result.cases[0].status).toBe("PASS");
     expect(result.cases[1].status).toBe("FAIL");
     expect(result.defects).toHaveLength(1);
-    expect(result.detectedModule).toBe("Login FIXTURE");
+    expect(result.detectedModule).toBe("Login");
   });
 
   it("feeds dashboard status from Estado when Resultado esperado is also present", () => {
@@ -118,6 +134,81 @@ describe("excel parser", () => {
     expect(result.cases[1].status).toBe("FAIL");
     expect(result.detectedProject).toBe("SUMIMEDICAL");
   });
+
+  it("reads Catalogos + Casos de Prueba and ignores Dashboard/Trazabilidad/Defectos", async () => {
+    const wb = new ExcelJS.Workbook();
+    const dash = wb.addWorksheet("Dashboard");
+    dash.addRow(["TOTAL CASOS", "PASS", "FAIL"]);
+    dash.addRow(["99", "90", "9"]);
+    const catalog = wb.addWorksheet("Catalogos");
+    catalog.addRow(["Clientes", "Modulos", "Tipo de Prueba", "Estado Ejecucion"]);
+    catalog.addRow(["SUMI (Sumimedical)", "Medicamentos", "Funcional", "Pasa"]);
+    catalog.addRow(["MEDICINA INTEGRAL", "Incapacidad", "Integración", "Falla"]);
+    catalog.addRow(["FERROCARRILES", "", "", ""]);
+    catalog.addRow(["FOMAG", "", "", ""]);
+    const cases = wb.addWorksheet("Casos de Prueba");
+    cases.addRow([
+      "ID Caso",
+      "Cliente",
+      "Módulo",
+      "Título del Caso",
+      "Tipo",
+      "Pasos",
+      "Resultado Esperado",
+      "Obtenido",
+      "Estado",
+      "Ejecutor",
+      "Evidencia (link)",
+    ]);
+    cases.addRow([
+      "SUMI-MED-001",
+      "SUMI (Sumimedical)",
+      "Medicamentos",
+      "Dispensar medicamento",
+      "Funcional",
+      "1. Abrir módulo",
+      "Queda dispensado",
+      "Queda dispensado",
+      "Pasa",
+      "QA SUMI",
+      "https://example.test/evidence-pass",
+    ]);
+    cases.addRow([
+      "SUMI-INC-003",
+      "SUMI (Sumimedical)",
+      "Incapacidad",
+      "Registrar incapacidad",
+      "Funcional",
+      "1. Guardar",
+      "Queda registrada",
+      "Error al guardar",
+      "Falla",
+      "QA SUMI",
+      "https://example.test/evidence-fail",
+    ]);
+    const defects = wb.addWorksheet("Defectos");
+    defects.addRow(["ID Defecto", "Título", "Estado"]);
+    defects.addRow(["DEF-999", "Invented from Defectos sheet", "Abierto"]);
+    const trace = wb.addWorksheet("Trazabilidad");
+    trace.addRow(["HU", "Casos", "Cobertura"]);
+    trace.addRow(["HU-1", "99", "100%"]);
+    const buffer = Buffer.from(await wb.xlsx.writeBuffer());
+    const result = await parseExcel(buffer, "Matriz_QA_Estandar_FIXTURE.xlsx");
+    expect(result.cases).toHaveLength(2);
+    expect(result.cases.map((c) => c.externalId)).toEqual(["SUMI-MED-001", "SUMI-INC-003"]);
+    expect(result.cases[0].status).toBe("PASS");
+    expect(result.cases[1].status).toBe("FAIL");
+    expect(result.cases[0].project).toBe("SUMIMEDICAL");
+    expect(result.cases[0].steps).toBe("1. Abrir módulo");
+    expect(result.cases[0].expected).toBe("Queda dispensado");
+    expect(result.cases[1].actual).toBe("Error al guardar");
+    expect(result.cases[0].evidenceUrl).toBe("https://example.test/evidence-pass");
+    expect(result.catalog?.some((i) => i.category === "CLIENT" && i.value.includes("SUMI"))).toBe(true);
+    expect(result.catalog?.some((i) => i.category === "CLIENT" && i.value === "FOMAG")).toBe(true);
+    expect(result.cases.some((c) => c.title.includes("Invented"))).toBe(false);
+    expect(result.cases.some((c) => c.externalId === "DEF-999")).toBe(false);
+    expect(result.warnings.some((w) => w.code === "CATALOG_PARSED")).toBe(true);
+  });
 });
 
 describe("project from Drive folder", () => {
@@ -129,6 +220,12 @@ describe("project from Drive folder", () => {
     expect(fromFolder.project).toBe("MEDICINA INTEGRAL");
     expect(inferFromFileName("Matriz_QA_Atencion_Particular.xlsx").project).toBe("SUMIMEDICAL");
     expect(inferFromFileName("Validacion_Modulos_Horus-M.I.xlsx").project).toBe("MEDICINA INTEGRAL");
+  });
+
+  it("normalizes client aliases from the standard matrix", () => {
+    expect(normalizeProjectName("SUMI (Sumimedical)")).toBe("SUMIMEDICAL");
+    expect(normalizeProjectName("MEDICINA INTEGRAL")).toBe("MEDICINA INTEGRAL");
+    expect(normalizeProjectName("FOMAG")).toBe("FOMAG");
   });
 });
 
