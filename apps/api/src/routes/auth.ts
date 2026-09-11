@@ -17,14 +17,23 @@ export async function authRoutes(app: FastifyInstance) {
       role: user.role,
       name: user.name,
     });
-    return { token, user: { id: user.id, email: user.email, name: user.name, role: user.role } };
+    return {
+      token,
+      user: {
+        id: user.id,
+        email: user.email,
+        name: user.name,
+        role: user.role,
+        allowedModules: user.allowedModules,
+      },
+    };
   });
 
   app.get("/api/v1/auth/me", { preHandler: [app.authenticate] }, async (request) => {
     const payload = request.user as { sub: string };
     const user = await prisma.user.findUnique({
       where: { id: payload.sub },
-      select: { id: true, email: true, name: true, role: true },
+      select: { id: true, email: true, name: true, role: true, allowedModules: true },
     });
     return { user };
   });

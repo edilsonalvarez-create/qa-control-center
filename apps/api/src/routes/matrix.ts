@@ -1,6 +1,7 @@
 import type { FastifyInstance, FastifyReply } from "fastify";
 import { ZodError } from "zod";
 import { parseFilters } from "../lib/filters.js";
+import { requireModule } from "../lib/modules.js";
 import {
   createManualCase,
   deleteManualCase,
@@ -19,17 +20,17 @@ function fail(reply: FastifyReply, error: unknown) {
 }
 
 export async function matrixRoutes(app: FastifyInstance) {
-  app.get("/api/v1/matrix/cases", { preHandler: [app.authenticate] }, async (request) => {
+  app.get("/api/v1/matrix/cases", { preHandler: [app.authenticate, requireModule("matrix")] }, async (request) => {
     const filters = parseFilters(request);
     const origin = (request.query as { origin?: string }).origin;
     return listMatrixCases({ ...filters, origin });
   });
 
-  app.get("/api/v1/matrix/projects", { preHandler: [app.authenticate] }, async () => {
+  app.get("/api/v1/matrix/projects", { preHandler: [app.authenticate, requireModule("matrix")] }, async () => {
     return listAllProjects();
   });
 
-  app.post("/api/v1/matrix/cases", { preHandler: [app.authenticate, app.requireQa] }, async (request, reply) => {
+  app.post("/api/v1/matrix/cases", { preHandler: [app.authenticate, requireModule("matrix"), app.requireQa] }, async (request, reply) => {
     const user = request.user as { sub: string };
     try {
       return await createManualCase(request.body, user.sub);
@@ -38,7 +39,7 @@ export async function matrixRoutes(app: FastifyInstance) {
     }
   });
 
-  app.patch("/api/v1/matrix/cases/:id", { preHandler: [app.authenticate, app.requireQa] }, async (request, reply) => {
+  app.patch("/api/v1/matrix/cases/:id", { preHandler: [app.authenticate, requireModule("matrix"), app.requireQa] }, async (request, reply) => {
     const { id } = request.params as { id: string };
     const user = request.user as { sub: string };
     try {
@@ -48,7 +49,7 @@ export async function matrixRoutes(app: FastifyInstance) {
     }
   });
 
-  app.delete("/api/v1/matrix/cases/:id", { preHandler: [app.authenticate, app.requireQa] }, async (request, reply) => {
+  app.delete("/api/v1/matrix/cases/:id", { preHandler: [app.authenticate, requireModule("matrix"), app.requireQa] }, async (request, reply) => {
     const { id } = request.params as { id: string };
     const user = request.user as { sub: string };
     try {
@@ -58,7 +59,7 @@ export async function matrixRoutes(app: FastifyInstance) {
     }
   });
 
-  app.post("/api/v1/matrix/import", { preHandler: [app.authenticate, app.requireQa] }, async (request, reply) => {
+  app.post("/api/v1/matrix/import", { preHandler: [app.authenticate, requireModule("matrix"), app.requireQa] }, async (request, reply) => {
     const file = await request.file();
     if (!file) return reply.code(400).send({ error: "Archivo requerido" });
     const buffer = await file.toBuffer();

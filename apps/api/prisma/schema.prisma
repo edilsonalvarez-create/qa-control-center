@@ -102,15 +102,18 @@ enum ImportJobStatus {
 }
 
 model User {
-  id           String      @id @default(cuid())
-  email        String      @unique
-  name         String
-  passwordHash String
-  role         Role        @default(VIEWER)
-  active       Boolean     @default(true)
-  createdAt    DateTime    @default(now())
-  updatedAt    DateTime    @updatedAt
-  auditLogs    AuditLog[]
+  id             String      @id @default(cuid())
+  email          String      @unique
+  name           String
+  passwordHash   String
+  role           Role        @default(VIEWER)
+  active         Boolean     @default(true)
+  /// Module keys (see apps/api/src/lib/modules.ts) this user's sidebar/API access is
+  /// restricted to. Empty array = no restriction (all modules). ADMIN always bypasses.
+  allowedModules String[]    @default([])
+  createdAt      DateTime    @default(now())
+  updatedAt      DateTime    @updatedAt
+  auditLogs      AuditLog[]
   importJobs   ImportJob[]
 }
 
