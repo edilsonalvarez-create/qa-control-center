@@ -1,10 +1,11 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { prisma } from "../lib/prisma.js";
+import { requireModule } from "../lib/modules.js";
 import { commitImport, createPreview } from "../services/import-service.js";
 
 export async function importRoutes(app: FastifyInstance) {
-  app.post("/api/v1/import/upload", { preHandler: [app.authenticate, app.requireQa] }, async (request, reply) => {
+  app.post("/api/v1/import/upload", { preHandler: [app.authenticate, requireModule("import"), app.requireQa] }, async (request, reply) => {
     const file = await request.file();
     if (!file) return reply.code(400).send({ error: "File required" });
     const buffer = await file.toBuffer();
@@ -23,7 +24,7 @@ export async function importRoutes(app: FastifyInstance) {
     return job;
   });
 
-  app.get("/api/v1/import/:id", { preHandler: [app.authenticate] }, async (request, reply) => {
+  app.get("/api/v1/import/:id", { preHandler: [app.authenticate, requireModule("import", "matrix")] }, async (request, reply) => {
     const { id } = request.params as { id: string };
     const job = await prisma.importJob.findUnique({
       where: { id },
@@ -33,7 +34,7 @@ export async function importRoutes(app: FastifyInstance) {
     return job;
   });
 
-  app.get("/api/v1/import", { preHandler: [app.authenticate] }, async () => {
+  app.get("/api/v1/import", { preHandler: [app.authenticate, requireModule("import")] }, async () => {
     return prisma.importJob.findMany({
       include: { sourceFile: true, duplicates: true, user: { select: { email: true, name: true } } },
       orderBy: { createdAt: "desc" },
@@ -41,7 +42,10 @@ export async function importRoutes(app: FastifyInstance) {
     });
   });
 
-  app.post("/api/v1/import/:id/commit", { preHandler: [app.authenticate, app.requireQa] }, async (request, reply) => {
+  app.post(
+    "/api/v1/import/:id/commit",
+    { preHandler: [app.authenticate, requireModule("import", "matrix"), app.requireQa] },
+    async (request, reply) => {
     const { id } = request.params as { id: string };
     const body = z.object({ confirmDuplicates: z.boolean().optional() }).safeParse(request.body ?? {});
     const user = request.user as { sub: string };

@@ -18,9 +18,10 @@ import {
   listableCaseWhere,
 } from "../lib/case-visibility.js";
 import { sanitizeQuery } from "../lib/auth.js";
+import { requireModule } from "../lib/modules.js";
 
 export async function domainRoutes(app: FastifyInstance) {
-  app.get("/api/v1/dashboard", { preHandler: [app.authenticate] }, async (request) => {
+  app.get("/api/v1/dashboard", { preHandler: [app.authenticate, requireModule("dashboard")] }, async (request) => {
     return getDashboard(parseFilters(request));
   });
 
@@ -61,7 +62,7 @@ export async function domainRoutes(app: FastifyInstance) {
     });
   });
 
-  app.get("/api/v1/test-runs", { preHandler: [app.authenticate] }, async (request) => {
+  app.get("/api/v1/test-runs", { preHandler: [app.authenticate, requireModule("runs")] }, async (request) => {
     const f = parseFilters(request);
     return prisma.testRun.findMany({
       where: await runListWhere(f),
@@ -70,7 +71,7 @@ export async function domainRoutes(app: FastifyInstance) {
     });
   });
 
-  app.get("/api/v1/test-runs/:id", { preHandler: [app.authenticate] }, async (request, reply) => {
+  app.get("/api/v1/test-runs/:id", { preHandler: [app.authenticate, requireModule("runs")] }, async (request, reply) => {
     const { id } = request.params as { id: string };
     const run = await prisma.testRun.findUnique({
       where: { id },
@@ -90,7 +91,7 @@ export async function domainRoutes(app: FastifyInstance) {
     return run;
   });
 
-  app.get("/api/v1/test-cases", { preHandler: [app.authenticate] }, async (request) => {
+  app.get("/api/v1/test-cases", { preHandler: [app.authenticate, requireModule("cases")] }, async (request) => {
     const f = parseFilters(request);
     return prisma.testCase.findMany({
       where: await caseWhere(f, "listable"),
@@ -100,7 +101,7 @@ export async function domainRoutes(app: FastifyInstance) {
     });
   });
 
-  app.get("/api/v1/defects", { preHandler: [app.authenticate] }, async (request) => {
+  app.get("/api/v1/defects", { preHandler: [app.authenticate, requireModule("defects")] }, async (request) => {
     const f = parseFilters(request);
     const q = request.query as { status?: string };
     return prisma.defect.findMany({
@@ -115,7 +116,7 @@ export async function domainRoutes(app: FastifyInstance) {
     });
   });
 
-  app.patch("/api/v1/defects/:id", { preHandler: [app.authenticate, app.requireQa] }, async (request, reply) => {
+  app.patch("/api/v1/defects/:id", { preHandler: [app.authenticate, requireModule("defects"), app.requireQa] }, async (request, reply) => {
     const { id } = request.params as { id: string };
     const body = z
       .object({
@@ -133,7 +134,7 @@ export async function domainRoutes(app: FastifyInstance) {
     return defect;
   });
 
-  app.get("/api/v1/evidence", { preHandler: [app.authenticate] }, async (request) => {
+  app.get("/api/v1/evidence", { preHandler: [app.authenticate, requireModule("evidence")] }, async (request) => {
     const f = parseFilters(request);
     return prisma.evidence.findMany({
       where: {
@@ -144,11 +145,11 @@ export async function domainRoutes(app: FastifyInstance) {
     });
   });
 
-  app.get("/api/v1/coverage", { preHandler: [app.authenticate] }, async (request) => {
+  app.get("/api/v1/coverage", { preHandler: [app.authenticate, requireModule("coverage")] }, async (request) => {
     return getCoverage(parseFilters(request));
   });
 
-  app.get("/api/v1/timeline", { preHandler: [app.authenticate] }, async (request) => {
+  app.get("/api/v1/timeline", { preHandler: [app.authenticate, requireModule("timeline")] }, async (request) => {
     const f = parseFilters(request);
     return prisma.testRun.findMany({
       where: await runListWhere(f),
@@ -158,7 +159,7 @@ export async function domainRoutes(app: FastifyInstance) {
     });
   });
 
-  app.get("/api/v1/releases", { preHandler: [app.authenticate] }, async (request) => {
+  app.get("/api/v1/releases", { preHandler: [app.authenticate, requireModule("releases")] }, async (request) => {
     const f = parseFilters(request);
     return prisma.release.findMany({
       where: { projectId: f.projectId },
@@ -167,7 +168,7 @@ export async function domainRoutes(app: FastifyInstance) {
     });
   });
 
-  app.get("/api/v1/reports", { preHandler: [app.authenticate] }, async (request) => {
+  app.get("/api/v1/reports", { preHandler: [app.authenticate, requireModule("reports")] }, async (request) => {
     const f = parseFilters(request);
     return prisma.qaReport.findMany({
       where: { projectId: f.projectId },
@@ -176,7 +177,7 @@ export async function domainRoutes(app: FastifyInstance) {
     });
   });
 
-  app.get("/api/v1/reports/export", { preHandler: [app.authenticate] }, async (request, reply) => {
+  app.get("/api/v1/reports/export", { preHandler: [app.authenticate, requireModule("reports")] }, async (request, reply) => {
     const f = parseFilters(request);
     const runs = await prisma.testRun.findMany({
       where: await runListWhere(f),
@@ -216,11 +217,11 @@ export async function domainRoutes(app: FastifyInstance) {
     return prisma.sourceFile.findMany({ include: { project: true }, orderBy: { createdAt: "desc" } });
   });
 
-  app.get("/api/v1/catalog", { preHandler: [app.authenticate] }, async () => {
+  app.get("/api/v1/catalog", { preHandler: [app.authenticate, requireModule("catalog")] }, async () => {
     return listCatalog();
   });
 
-  app.post("/api/v1/catalog", { preHandler: [app.authenticate, app.requireQa] }, async (request, reply) => {
+  app.post("/api/v1/catalog", { preHandler: [app.authenticate, requireModule("catalog"), app.requireQa] }, async (request, reply) => {
     const body = z.object({ category: z.string(), value: z.string().min(1).max(200) }).safeParse(request.body);
     if (!body.success || !isCatalogCategory(body.data.category)) {
       return reply.code(400).send({ error: "Invalid catalog item" });
@@ -238,7 +239,7 @@ export async function domainRoutes(app: FastifyInstance) {
     }
   });
 
-  app.patch("/api/v1/catalog/:id", { preHandler: [app.authenticate, app.requireQa] }, async (request, reply) => {
+  app.patch("/api/v1/catalog/:id", { preHandler: [app.authenticate, requireModule("catalog"), app.requireQa] }, async (request, reply) => {
     const { id } = request.params as { id: string };
     const body = z.object({ value: z.string().min(1).max(200) }).safeParse(request.body);
     if (!body.success) return reply.code(400).send({ error: "Invalid payload" });
@@ -255,7 +256,7 @@ export async function domainRoutes(app: FastifyInstance) {
     }
   });
 
-  app.delete("/api/v1/catalog/:id", { preHandler: [app.authenticate, app.requireQa] }, async (request, reply) => {
+  app.delete("/api/v1/catalog/:id", { preHandler: [app.authenticate, requireModule("catalog"), app.requireQa] }, async (request, reply) => {
     const { id } = request.params as { id: string };
     try {
       const result = await deleteCatalogItem(id);
@@ -270,7 +271,7 @@ export async function domainRoutes(app: FastifyInstance) {
     }
   });
 
-  app.post("/api/v1/catalog/import", { preHandler: [app.authenticate, app.requireQa] }, async (request, reply) => {
+  app.post("/api/v1/catalog/import", { preHandler: [app.authenticate, requireModule("catalog"), app.requireQa] }, async (request, reply) => {
     const file = await request.file();
     if (!file) return reply.code(400).send({ error: "File required" });
     const buffer = await file.toBuffer();
