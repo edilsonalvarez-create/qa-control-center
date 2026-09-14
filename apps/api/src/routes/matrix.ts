@@ -2,6 +2,7 @@ import type { FastifyInstance, FastifyReply } from "fastify";
 import { ZodError } from "zod";
 import { parseFilters } from "../lib/filters.js";
 import { requireModule } from "../lib/modules.js";
+import { requirePermission } from "../lib/permissions.js";
 import {
   createManualCase,
   deleteManualCase,
@@ -49,7 +50,7 @@ export async function matrixRoutes(app: FastifyInstance) {
     }
   });
 
-  app.delete("/api/v1/matrix/cases/:id", { preHandler: [app.authenticate, requireModule("matrix"), app.requireQa] }, async (request, reply) => {
+  app.delete("/api/v1/matrix/cases/:id", { preHandler: [app.authenticate, requireModule("matrix"), requirePermission("delete")] }, async (request, reply) => {
     const { id } = request.params as { id: string };
     const user = request.user as { sub: string };
     try {

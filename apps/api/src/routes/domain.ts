@@ -19,6 +19,7 @@ import {
 } from "../lib/case-visibility.js";
 import { sanitizeQuery } from "../lib/auth.js";
 import { requireModule } from "../lib/modules.js";
+import { requirePermission } from "../lib/permissions.js";
 
 export async function domainRoutes(app: FastifyInstance) {
   app.get("/api/v1/dashboard", { preHandler: [app.authenticate, requireModule("dashboard")] }, async (request) => {
@@ -256,7 +257,7 @@ export async function domainRoutes(app: FastifyInstance) {
     }
   });
 
-  app.delete("/api/v1/catalog/:id", { preHandler: [app.authenticate, requireModule("catalog"), app.requireQa] }, async (request, reply) => {
+  app.delete("/api/v1/catalog/:id", { preHandler: [app.authenticate, requireModule("catalog"), requirePermission("delete")] }, async (request, reply) => {
     const { id } = request.params as { id: string };
     try {
       const result = await deleteCatalogItem(id);

@@ -3,6 +3,7 @@ import { Pencil, Plus, X } from "lucide-react";
 import { api } from "../lib/api";
 import { useAuth } from "../lib/auth";
 import { MODULE_KEYS, MODULE_LABELS, type ModuleKey } from "../lib/modules";
+import { PERMISSION_KEYS, PERMISSION_LABELS, type PermissionKey } from "../lib/permissions";
 
 const ROLES = ["ADMIN", "QA_MANAGER", "QA", "VIEWER"] as const;
 const ROLE_LABELS: Record<string, string> = {
@@ -11,6 +12,88 @@ const ROLE_LABELS: Record<string, string> = {
   QA: "QA",
   VIEWER: "Solo lectura",
 };
+
+type RolePermissionRow = { role: (typeof ROLES)[number]; permission: PermissionKey; allowed: boolean };
+
+function PermissionsPanel() {
+  const [rows, setRows] = useState<RolePermissionRow[]>([]);
+  const [error, setError] = useState("");
+  const [busyCell, setBusyCell] = useState<string | null>(null);
+
+  async function reload() {
+    setRows(await api<RolePermissionRow[]>("/api/v1/permissions"));
+  }
+
+  useEffect(() => {
+    reload().catch((e) => setError((e as Error).message));
+  }, []);
+
+  function cell(role: (typeof ROLES)[number], permission: PermissionKey) {
+    return rows.find((r) => r.role === role && r.permission === permission);
+  }
+
+  async function toggle(role: (typeof ROLES)[number], permission: PermissionKey, next: boolean) {
+    const key = `${role}|${permission}`;
+    setBusyCell(key);
+    setError("");
+    try {
+      await api("/api/v1/permissions", { method: "PATCH", body: JSON.stringify({ role, permission, allowed: next }) });
+      await reload();
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setBusyCell(null);
+    }
+  }
+
+  return (
+    <div className="card space-y-3">
+      <div>
+        <h3 className="font-semibold">Permisos por rol</h3>
+        <p className="text-sm text-slate-500">
+          Además de los módulos que ve cada usuario, estos permisos habilitan o bloquean acciones puntuales
+          (por ahora, eliminar registros en Catálogo y Matriz QA) según el rol.
+        </p>
+      </div>
+      {error && <p className="text-sm text-rose-500">{error}</p>}
+      <div className="overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="text-left text-slate-500">
+              <th className="py-1 pr-3">Permiso</th>
+              {ROLES.map((r) => (
+                <th key={r} className="px-3 text-center">
+                  {ROLE_LABELS[r]}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {PERMISSION_KEYS.map((permission) => (
+              <tr key={permission} className="border-t border-slate-200 dark:border-slate-800">
+                <td className="py-2 pr-3">{PERMISSION_LABELS[permission]}</td>
+                {ROLES.map((role) => {
+                  const c = cell(role, permission);
+                  const key = `${role}|${permission}`;
+                  return (
+                    <td key={role} className="px-3 text-center">
+                      <input
+                        type="checkbox"
+                        checked={c?.allowed ?? false}
+                        disabled={!c || busyCell === key}
+                        onChange={(e) => toggle(role, permission, e.target.checked)}
+                      />
+                    </td>
+                  );
+                })}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
 
 type ManagedUser = {
   id: string;
@@ -218,6 +301,8 @@ export function UsersPage() {
           </tbody>
         </table>
       </div>
+
+      <PermissionsPanel />
 
       {form && (
         <div className="fixed inset-0 z-30 flex justify-end bg-black/40">
