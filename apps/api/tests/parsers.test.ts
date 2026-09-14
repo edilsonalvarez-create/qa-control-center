@@ -57,6 +57,8 @@ describe("status and metrics", () => {
     expect(mapStatus("Falló")).toBe("FAIL");
     expect(mapStatus("Pasa")).toBe("PASS");
     expect(mapStatus("Falla")).toBe("FAIL");
+    expect(mapStatus("Incorrecto")).toBe("FAIL");
+    expect(mapStatus("Incorrecta")).toBe("FAIL");
     expect(mapStatus("Bloqueado")).toBe("BLOCKED");
     expect(mapStatus("N/A")).toBe("SKIPPED");
     expect(mapStatus("")).toBe("UNKNOWN");
