@@ -2,6 +2,7 @@ import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import bcrypt from "bcryptjs";
 import { prisma } from "../lib/prisma.js";
+import { permissionsForRole } from "../lib/permissions.js";
 
 export async function authRoutes(app: FastifyInstance) {
   app.post("/api/v1/auth/login", async (request, reply) => {
@@ -25,6 +26,7 @@ export async function authRoutes(app: FastifyInstance) {
         name: user.name,
         role: user.role,
         allowedModules: user.allowedModules,
+        permissions: await permissionsForRole(user.role),
       },
     };
   });
@@ -35,6 +37,7 @@ export async function authRoutes(app: FastifyInstance) {
       where: { id: payload.sub },
       select: { id: true, email: true, name: true, role: true, allowedModules: true },
     });
-    return { user };
+    if (!user) return { user: null };
+    return { user: { ...user, permissions: await permissionsForRole(user.role) } };
   });
 }

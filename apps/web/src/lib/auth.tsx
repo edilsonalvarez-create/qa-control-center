@@ -1,7 +1,14 @@
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
 import { api, clearToken, getToken, setToken } from "./api";
 
-export type User = { id: string; email: string; name: string; role: string; allowedModules: string[] };
+export type User = {
+  id: string;
+  email: string;
+  name: string;
+  role: string;
+  allowedModules: string[];
+  permissions: Record<string, boolean>;
+};
 
 type AuthCtx = {
   user: User | null;

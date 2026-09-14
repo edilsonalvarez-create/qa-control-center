@@ -51,6 +51,15 @@ export async function isPermissionAllowed(role: Role, permission: PermissionKey)
   return DEFAULT_ALLOWED[permission].includes(role);
 }
 
+/** All permission keys resolved for one role — sent to the client (auth.ts) so the
+ * UI knows what to show without every user needing the ADMIN-only /permissions route. */
+export async function permissionsForRole(role: Role): Promise<Record<PermissionKey, boolean>> {
+  const entries = await Promise.all(
+    PERMISSION_KEYS.map(async (key) => [key, await isPermissionAllowed(role, key)] as const),
+  );
+  return Object.fromEntries(entries) as Record<PermissionKey, boolean>;
+}
+
 /** Toggle one role/permission cell. Refuses to leave a permission with zero roles granted. */
 export async function setRolePermission(role: Role, permission: PermissionKey, allowed: boolean) {
   if (!allowed) {

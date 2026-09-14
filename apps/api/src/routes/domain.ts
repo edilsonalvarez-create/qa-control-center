@@ -20,6 +20,7 @@ import {
 import { sanitizeQuery } from "../lib/auth.js";
 import { requireModule } from "../lib/modules.js";
 import { requirePermission } from "../lib/permissions.js";
+import { deleteTestRun } from "../services/testrun-service.js";
 
 export async function domainRoutes(app: FastifyInstance) {
   app.get("/api/v1/dashboard", { preHandler: [app.authenticate, requireModule("dashboard")] }, async (request) => {
@@ -91,6 +92,21 @@ export async function domainRoutes(app: FastifyInstance) {
     if (!run) return reply.code(404).send({ error: "Not found" });
     return run;
   });
+
+  app.delete(
+    "/api/v1/test-runs/:id",
+    { preHandler: [app.authenticate, requireModule("runs"), requirePermission("delete")] },
+    async (request, reply) => {
+      const { id } = request.params as { id: string };
+      const user = request.user as { sub: string };
+      try {
+        return await deleteTestRun(id, user.sub);
+      } catch (error) {
+        const e = error as Error & { statusCode?: number };
+        return reply.code(e.statusCode ?? 500).send({ error: e.message });
+      }
+    },
+  );
 
   app.get("/api/v1/test-cases", { preHandler: [app.authenticate, requireModule("cases")] }, async (request) => {
     const f = parseFilters(request);
