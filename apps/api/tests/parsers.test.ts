@@ -138,6 +138,68 @@ describe("excel parser", () => {
     expect(result.detectedProject).toBe("SUMIMEDICAL");
   });
 
+  it("reads a clinical-scale spec matrix (no Título/Cliente/Módulo columns)", async () => {
+    // Shape of the PHQ-4 / GerdQ / STOP-Bang sheets QA has been pasting as a
+    // manual "resumen" case + evidence link instead of importing directly.
+    const wb = new ExcelJS.Workbook();
+    const sheet = wb.addWorksheet("Hoja1");
+    sheet.addRow(["Matriz QA — Cuestionario STOP-Bang"]);
+    sheet.addRow(["Reglas: ..."]);
+    sheet.addRow([]);
+    sheet.addRow([
+      "ID",
+      "Escala",
+      "Variable / Campo evaluado",
+      "Tipo de caso",
+      "Valor(es) de entrada",
+      "Resultado esperado",
+      "Prioridad",
+      "Resultado obtenido",
+      "Estado",
+      "Observaciones",
+    ]);
+    sheet.addRow([
+      "SB-01",
+      "STOP-Bang",
+      "Total de respuestas Sí",
+      "Valor normal",
+      "0 de 8 preguntas en Sí",
+      "Riesgo BAJO",
+      "Alta",
+      "Riesgo BAJO",
+      "Pasó",
+      "",
+    ]);
+    sheet.addRow([
+      "SB-12",
+      "STOP-Bang",
+      "Campo vacío / sin responder",
+      "Caso extremo",
+      "Una o más preguntas sin responder",
+      "Debe alertar dato faltante",
+      "Media",
+      "",
+      "Incorrecto",
+      "Definir con el equipo funcional el comportamiento esperado",
+    ]);
+    const buffer = Buffer.from(await wb.xlsx.writeBuffer());
+    const result = await parseExcel(buffer, "Cuestionario_Stop_Bang.xlsx");
+
+    expect(result.cases).toHaveLength(2);
+    expect(result.cases[0].status).toBe("PASS");
+    expect(result.cases[0].title).toBe("STOP-Bang — Valor normal");
+    expect(result.cases[0].product).toBe("STOP-Bang");
+    expect(result.cases[0].functionality).toBe("Total de respuestas Sí");
+    expect(result.cases[0].testData).toBe("0 de 8 preguntas en Sí");
+    expect(result.cases[0].module).toBe("Historia Clínica");
+    expect(result.detectedProject).toBe("MEDICINA INTEGRAL");
+
+    expect(result.cases[1].status).toBe("FAIL");
+    expect(result.cases[1].title).toBe("STOP-Bang — Caso extremo");
+    expect(result.defects).toHaveLength(1);
+    expect(result.defects[0].title).toBe("STOP-Bang — Caso extremo");
+  });
+
   it("reads Catalogos + Casos de Prueba and ignores Dashboard/Trazabilidad/Defectos", async () => {
     const wb = new ExcelJS.Workbook();
     const dash = wb.addWorksheet("Dashboard");
