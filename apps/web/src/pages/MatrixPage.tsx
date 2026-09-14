@@ -3,6 +3,7 @@ import { Pencil, Plus, Trash2, Upload, X } from "lucide-react";
 import { api, toQuery } from "../lib/api";
 import { useAuth } from "../lib/auth";
 import { useFilters } from "../lib/filters";
+import { formatDateOnly } from "../lib/dates";
 import { StatusBadge } from "../components/StatusBadge";
 import { EmptyState } from "../components/EmptyState";
 
@@ -303,7 +304,7 @@ export function MatrixPage() {
                   </td>
                   <td className="pr-3">{c.executor ?? "—"}</td>
                   <td className="pr-3">
-                    {c.executionDate ? new Date(c.executionDate).toLocaleDateString() : "—"}
+                    {formatDateOnly(c.executionDate)}
                   </td>
                   <td className="pr-3">
                     <span

@@ -4,6 +4,7 @@ import { Trash2 } from "lucide-react";
 import { api } from "../lib/api";
 import { useAuth } from "../lib/auth";
 import { hasPermission } from "../lib/permissions";
+import { formatDateOnly } from "../lib/dates";
 import { StatusBadge } from "../components/StatusBadge";
 
 export function RunDetailPage() {
@@ -47,7 +48,7 @@ export function RunDetailPage() {
           <h2 className="mt-2 text-2xl font-bold">
             {run.project?.name} · {run.module?.name ?? "Sin módulo"}
           </h2>
-          <p className="text-sm text-slate-500">{new Date(run.executionDate).toLocaleString()}</p>
+          <p className="text-sm text-slate-500">{formatDateOnly(run.executionDate)}</p>
         </div>
         {hasPermission(user, "delete") && (
           <button

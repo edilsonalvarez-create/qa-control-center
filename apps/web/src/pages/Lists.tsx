@@ -5,6 +5,7 @@ import { api, API_URL, getToken, toQuery } from "../lib/api";
 import { useAuth } from "../lib/auth";
 import { useFilters } from "../lib/filters";
 import { hasPermission } from "../lib/permissions";
+import { formatDateOnly } from "../lib/dates";
 import { CoverageDot, StatusBadge } from "../components/StatusBadge";
 import { EmptyState } from "../components/EmptyState";
 
@@ -28,7 +29,7 @@ export function RunsPage() {
   async function removeRun(r: any) {
     if (
       !window.confirm(
-        `¿Eliminar el test run del ${new Date(r.executionDate).toLocaleDateString()} (${r.project?.name ?? ""})? ` +
+        `¿Eliminar el test run del ${formatDateOnly(r.executionDate)} (${r.project?.name ?? ""})? ` +
           "Se borran también sus casos, defectos y evidencia. Esto no se puede deshacer.",
       )
     )
@@ -65,7 +66,7 @@ export function RunsPage() {
             <tr key={r.id} className="border-t border-slate-200 dark:border-slate-800">
               <td className="py-2">
                 <Link className="text-cyan-700 dark:text-cyan-400" to={`/runs/${r.id}`}>
-                  {new Date(r.executionDate).toLocaleDateString()}
+                  {formatDateOnly(r.executionDate)}
                 </Link>
               </td>
               <td>{r.project?.name}</td>
@@ -137,7 +138,7 @@ export function CasesPage() {
                 <StatusBadge value={c.status} />
               </td>
               <td>{c.executor ?? c.testRun?.tester ?? "—"}</td>
-              <td>{c.executionDate ? new Date(c.executionDate).toLocaleDateString() : "—"}</td>
+              <td>{formatDateOnly(c.executionDate)}</td>
             </tr>
           ))}
         </tbody>
@@ -212,7 +213,7 @@ export function CoveragePage() {
               <td>{r.project}</td>
               <td>{r.module}</td>
               <td>{r.tests}</td>
-              <td>{r.lastRun ? new Date(r.lastRun).toLocaleDateString() : "—"}</td>
+              <td>{formatDateOnly(r.lastRun)}</td>
               <td>
                 <StatusBadge value={r.lastResult} />
               </td>
@@ -270,7 +271,7 @@ export function TimelinePage() {
           <ol className="border-l border-slate-300 pl-4 dark:border-slate-700">
             {items.map((r) => (
               <li key={r.id} className="mb-4">
-                <p className="text-xs text-slate-500">{new Date(r.executionDate).toLocaleDateString()}</p>
+                <p className="text-xs text-slate-500">{formatDateOnly(r.executionDate)}</p>
                 <Link to={`/runs/${r.id}`} className="font-medium">
                   {r.testType} — {r.project?.name} {r.module?.name ? `· ${r.module.name}` : ""}
                 </Link>
@@ -339,7 +340,7 @@ export function ReportsPage() {
         <div key={r.id} className="card">
           <p className="font-medium">{r.fileName}</p>
           <p className="text-xs text-slate-500">
-            {r.reportType} · {new Date(r.reportDate).toLocaleDateString()} · {r.project?.name ?? "—"}
+            {r.reportType} · {formatDateOnly(r.reportDate)} · {r.project?.name ?? "—"}
           </p>
           {r.sourceUrl && (
             <a className="text-sm text-cyan-700" href={r.sourceUrl} target="_blank" rel="noreferrer">
