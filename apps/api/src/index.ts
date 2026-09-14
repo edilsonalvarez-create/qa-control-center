@@ -13,6 +13,7 @@ import { domainRoutes } from "./routes/domain.js";
 import { importRoutes } from "./routes/import.js";
 import { matrixRoutes } from "./routes/matrix.js";
 import { usersRoutes } from "./routes/users.js";
+import { permissionsRoutes } from "./routes/permissions.js";
 import { driveRoutes } from "./routes/drive.js";
 import { startDriveSyncScheduler } from "./jobs/drive-cron.js";
 import { repairProjectAttribution } from "./services/project-attribution.js";
@@ -61,6 +62,7 @@ async function build() {
   await app.register(importRoutes);
   await app.register(matrixRoutes);
   await app.register(usersRoutes);
+  await app.register(permissionsRoutes);
   await driveRoutes(app, config);
 
   app.setErrorHandler((err, _req, reply) => {

@@ -390,6 +390,19 @@ model AuditLog {
   createdAt  DateTime @default(now())
 }
 
+/// Fine-grained capability (e.g. "delete") toggled per Role by an admin,
+/// independent of the coarser Role checks (requireQa/requireAdmin). A role
+/// with no row here falls back to lib/permissions.ts DEFAULT_ALLOWED.
+model RolePermission {
+  id         String   @id @default(cuid())
+  role       Role
+  permission String
+  allowed    Boolean  @default(false)
+  updatedAt  DateTime @updatedAt
+
+  @@unique([role, permission])
+}
+
 /// Singleton Google Drive OAuth connection (refresh token encrypted at rest).
 model DriveConnection {
   id              String    @id @default("default")
