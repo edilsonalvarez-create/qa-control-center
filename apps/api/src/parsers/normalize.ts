@@ -219,5 +219,12 @@ export function inferFromFileName(fileName: string, sourcePath?: string) {
     moduleName = moduleName ?? "Impresión de órdenes / reglas de líneas telefónicas";
   }
 
+  // Clinical-scale spec matrices (PHQ-4, GerdQ, STOP-Bang, ...) never carry a
+  // Módulo/Componente column — they all live under Historia Clínica for
+  // MEDICINA INTEGRAL, same as the manual entries already registered there.
+  if (/\bphq\b|stop[_ -]?bang|\bgerdq\b|escalas? clinicas?|escalas? clínicas?/i.test(fileName)) {
+    moduleName = moduleName ?? "Historia Clínica";
+  }
+
   return { project, moduleName, testType, environment };
 }

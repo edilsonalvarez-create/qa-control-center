@@ -93,7 +93,13 @@ export function parseCaseRows(rows: string[][], fileName: string, sourcePath?: s
     if (raw.every((c) => !normalizeText(c))) continue;
     const get = (role: HeaderMapping["role"]) => mappedCell(headers, raw, role);
     if (pickHeader(headers, "externalId") && !get("externalId")) continue;
-    const title = get("title") || get("externalId");
+    // Sheets like the clinical-scale spec matrices (PHQ-4/GerdQ/STOP-Bang) have no
+    // "Título del Caso" column at all — build a readable title from Escala/Producto +
+    // Tipo de caso instead of falling straight through to the bare row ID.
+    const title =
+      get("title") ||
+      [get("product"), get("description")].filter(Boolean).join(" — ") ||
+      get("externalId");
     const externalId = get("externalId") || undefined;
     if (!hasCaseInformation({ title, externalId })) continue;
     const moduleName = get("module") || inferred.moduleName;
