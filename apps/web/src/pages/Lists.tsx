@@ -1,25 +1,46 @@
 import { useEffect, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
+import { Trash2 } from "lucide-react";
 import { api, API_URL, getToken, toQuery } from "../lib/api";
+import { useAuth } from "../lib/auth";
 import { useFilters } from "../lib/filters";
+import { hasPermission } from "../lib/permissions";
 import { CoverageDot, StatusBadge } from "../components/StatusBadge";
 import { EmptyState } from "../components/EmptyState";
 
 function useApiList<T>(path: string, deps: unknown[] = []) {
   const [rows, setRows] = useState<T[]>([]);
   const [error, setError] = useState("");
+  const reload = () => api<T[]>(path).then(setRows).catch((e) => setError((e as Error).message));
   useEffect(() => {
-    api<T[]>(path)
-      .then(setRows)
-      .catch((e) => setError(e.message));
+    reload();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, deps);
-  return { rows, error };
+  return { rows, error, reload };
 }
 
 export function RunsPage() {
+  const { user } = useAuth();
   const { query } = useFilters();
-  const { rows, error } = useApiList<any>(`/api/v1/test-runs${toQuery(query)}`, [query]);
+  const { rows, error, reload } = useApiList<any>(`/api/v1/test-runs${toQuery(query)}`, [query]);
+  const canDelete = hasPermission(user, "delete");
+
+  async function removeRun(r: any) {
+    if (
+      !window.confirm(
+        `¿Eliminar el test run del ${new Date(r.executionDate).toLocaleDateString()} (${r.project?.name ?? ""})? ` +
+          "Se borran también sus casos, defectos y evidencia. Esto no se puede deshacer.",
+      )
+    )
+      return;
+    try {
+      await api(`/api/v1/test-runs/${r.id}`, { method: "DELETE" });
+      await reload();
+    } catch (e) {
+      window.alert((e as Error).message);
+    }
+  }
+
   if (error) return <p className="text-rose-500">{error}</p>;
   if (!rows.length) return <EmptyState title="Sin test runs" hint="Importa una matriz o reporte desde Import Center." />;
   return (
@@ -36,6 +57,7 @@ export function RunsPage() {
             <th>Total</th>
             <th>P/F/B/S</th>
             <th>Estado</th>
+            {canDelete && <th></th>}
           </tr>
         </thead>
         <tbody>
@@ -57,6 +79,17 @@ export function RunsPage() {
               <td>
                 <StatusBadge value={r.status} />
               </td>
+              {canDelete && (
+                <td>
+                  <button
+                    className="text-slate-400 hover:text-rose-500"
+                    aria-label="Eliminar test run"
+                    onClick={() => removeRun(r)}
+                  >
+                    <Trash2 size={14} />
+                  </button>
+                </td>
+              )}
             </tr>
           ))}
         </tbody>

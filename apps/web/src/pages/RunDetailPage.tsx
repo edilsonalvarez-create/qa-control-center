@@ -1,10 +1,15 @@
 import { useEffect, useState } from "react";
-import { Link, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams } from "react-router-dom";
+import { Trash2 } from "lucide-react";
 import { api } from "../lib/api";
+import { useAuth } from "../lib/auth";
+import { hasPermission } from "../lib/permissions";
 import { StatusBadge } from "../components/StatusBadge";
 
 export function RunDetailPage() {
   const { id } = useParams();
+  const { user } = useAuth();
+  const nav = useNavigate();
   const [run, setRun] = useState<any>(null);
   const [error, setError] = useState("");
 
@@ -14,19 +19,44 @@ export function RunDetailPage() {
       .catch((e) => setError(e.message));
   }, [id]);
 
+  async function removeRun() {
+    if (
+      !window.confirm(
+        "¿Eliminar este test run? Se borran también sus casos, defectos y evidencia. Esto no se puede deshacer.",
+      )
+    )
+      return;
+    try {
+      await api(`/api/v1/test-runs/${id}`, { method: "DELETE" });
+      nav("/runs");
+    } catch (e) {
+      window.alert((e as Error).message);
+    }
+  }
+
   if (error) return <p className="text-rose-500">{error}</p>;
   if (!run) return <p>Cargando…</p>;
 
   return (
     <div className="space-y-6">
-      <div>
-        <Link to="/runs" className="text-sm text-cyan-700 dark:text-cyan-400">
-          ← Test Runs
-        </Link>
-        <h2 className="mt-2 text-2xl font-bold">
-          {run.project?.name} · {run.module?.name ?? "Sin módulo"}
-        </h2>
-        <p className="text-sm text-slate-500">{new Date(run.executionDate).toLocaleString()}</p>
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <Link to="/runs" className="text-sm text-cyan-700 dark:text-cyan-400">
+            ← Test Runs
+          </Link>
+          <h2 className="mt-2 text-2xl font-bold">
+            {run.project?.name} · {run.module?.name ?? "Sin módulo"}
+          </h2>
+          <p className="text-sm text-slate-500">{new Date(run.executionDate).toLocaleString()}</p>
+        </div>
+        {hasPermission(user, "delete") && (
+          <button
+            className="inline-flex items-center gap-2 rounded-xl border border-rose-300 px-3 py-2 text-sm text-rose-600 hover:bg-rose-50 dark:border-rose-800 dark:hover:bg-rose-950/40"
+            onClick={removeRun}
+          >
+            <Trash2 size={14} /> Eliminar test run
+          </button>
+        )}
       </div>
       <div className="grid gap-3 md:grid-cols-4">
         {[
