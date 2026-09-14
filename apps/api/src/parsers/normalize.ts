@@ -23,7 +23,7 @@ export function mapStatus(raw: string | undefined): string {
   const n = normalizeKey(raw ?? "");
   if (!n) return "UNKNOWN";
   if (
-    /\b(no (cumple|cumplio|ok|pasa|paso|exitoso|exitosa)|fallid[oa]|falla|fallo|failed|fail|error|reprobado|nok)\b/.test(
+    /\b(no (cumple|cumplio|ok|pasa|paso|exitoso|exitosa)|fallid[oa]|falla|fallo|failed|fail|error|reprobado|nok|incorrect[oa])\b/.test(
       n,
     )
   ) {
