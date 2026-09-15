@@ -19,7 +19,7 @@ import {
   panelCaseWhere,
 } from "../lib/case-visibility.js";
 import { fail } from "../lib/http-errors.js";
-import { updateManualCase } from "../services/matrix-service.js";
+import { repairManualRunGrouping, updateManualCase } from "../services/matrix-service.js";
 import { sanitizeQuery } from "../lib/auth.js";
 import { requireModule } from "../lib/modules.js";
 import { requirePermission } from "../lib/permissions.js";
@@ -358,5 +358,17 @@ export async function domainRoutes(app: FastifyInstance) {
       const e = err as Error & { statusCode?: number };
       return reply.code(e.statusCode ?? 500).send({ error: e.message });
     }
+  });
+
+  // On-demand version of the boot-time repair (see index.ts): lets an admin
+  // verify/re-run it immediately from Settings instead of waiting for the
+  // next deploy, and surfaces exactly what moved or failed.
+  app.post("/api/v1/admin/repair-manual-runs", { preHandler: [app.authenticate, app.requireAdmin] }, async (request) => {
+    const result = await repairManualRunGrouping();
+    const user = request.user as { sub: string };
+    await prisma.auditLog.create({
+      data: { userId: user.sub, action: "REPAIR_MANUAL_RUNS", entity: "TestRun", payload: result },
+    });
+    return result;
   });
 }

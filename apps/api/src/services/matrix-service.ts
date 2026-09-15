@@ -258,43 +258,53 @@ async function recomputeRun(runId: string) {
  * under the new scheme, reusing the same lookup normal writes use, then
  * recomputes every touched run (which deletes any left empty).
  */
-export async function repairManualRunGrouping(): Promise<number> {
+export async function repairManualRunGrouping(): Promise<{
+  scanned: number;
+  moved: number;
+  errors: Array<{ caseId: string; message: string }>;
+}> {
   const cases = await prisma.testCase.findMany({
     where: { origin: "MANUAL" },
     include: { testRun: true },
   });
   const touched = new Set<string>();
+  const errors: Array<{ caseId: string; message: string }> = [];
   let moved = 0;
   for (const c of cases) {
-    if (c.testRun.origin !== "MANUAL") continue;
-    const correctFingerprint = manualRunFingerprint(
-      c.testRun.projectId,
-      c.moduleName,
-      c.cycle,
-      c.externalId || c.title,
-    );
-    if (c.testRun.fingerprint === correctFingerprint) continue;
-    const target = await ensureManualRun({
-      projectId: c.testRun.projectId,
-      moduleName: c.moduleName,
-      cycle: c.cycle,
-      caseIdentity: c.externalId || c.title,
-      type: c.type,
-      executor: c.executor,
-    });
-    if (target.id === c.testRunId) continue;
-    const oldRunId = c.testRunId;
-    await prisma.testCase.update({ where: { id: c.id }, data: { testRunId: target.id } });
-    await prisma.defect.updateMany({ where: { testCaseId: c.id }, data: { testRunId: target.id } });
-    await prisma.evidence.updateMany({ where: { testCaseId: c.id }, data: { testRunId: target.id } });
-    touched.add(oldRunId);
-    touched.add(target.id);
-    moved += 1;
+    try {
+      if (c.testRun.origin !== "MANUAL") continue;
+      const correctFingerprint = manualRunFingerprint(
+        c.testRun.projectId,
+        c.moduleName,
+        c.cycle,
+        c.externalId || c.title,
+      );
+      if (c.testRun.fingerprint === correctFingerprint) continue;
+      const target = await ensureManualRun({
+        projectId: c.testRun.projectId,
+        moduleName: c.moduleName,
+        cycle: c.cycle,
+        caseIdentity: c.externalId || c.title,
+        type: c.type,
+        executor: c.executor,
+      });
+      if (target.id === c.testRunId) continue;
+      const oldRunId = c.testRunId;
+      await prisma.testCase.update({ where: { id: c.id }, data: { testRunId: target.id } });
+      await prisma.defect.updateMany({ where: { testCaseId: c.id }, data: { testRunId: target.id } });
+      await prisma.evidence.updateMany({ where: { testCaseId: c.id }, data: { testRunId: target.id } });
+      touched.add(oldRunId);
+      touched.add(target.id);
+      moved += 1;
+    } catch (err) {
+      // Never let one bad record abort the repair for every other case.
+      errors.push({ caseId: c.id, message: err instanceof Error ? err.message : String(err) });
+    }
   }
   for (const runId of touched) {
     await recomputeRun(runId);
   }
-  return moved;
+  return { scanned: cases.length, moved, errors };
 }
 
 /**
