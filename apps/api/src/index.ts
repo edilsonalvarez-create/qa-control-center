@@ -86,7 +86,7 @@ try {
   startDriveSyncScheduler(config);
   repairProjectAttribution().catch((err) => logger.error({ err }, "project attribution repair failed"));
   repairManualRunGrouping()
-    .then((moved) => moved && logger.info({ moved }, "split manual cases that were merged into the wrong run"))
+    .then((result) => result.moved && logger.info(result, "split manual cases that were merged into the wrong run"))
     .catch((err) => logger.error({ err }, "manual run grouping repair failed"));
 } catch (err) {
   logger.error({ err }, "failed to listen");
