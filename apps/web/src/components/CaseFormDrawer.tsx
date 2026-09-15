@@ -33,6 +33,7 @@ export type MatrixCase = {
   reviewedBy: string | null;
   observations: string | null;
   evidenceUrl: string | null;
+  defectRef: string | null;
   requirementRef: string | null;
   release: string | null;
   sprint: string | null;
@@ -87,6 +88,7 @@ const FIELDS: Array<[keyof MatrixCase | "projectId", string, string]> = [
   ["actual", "Resultado Obtenido", "textarea"],
   ["status", "Estado", "EXEC_STATUS"],
   ["severity", "Severidad (si falla)", "SEVERITY"],
+  ["defectRef", "ID Defecto", ""],
   ["evidenceUrl", "Evidencia (link)", "url"],
   ["observations", "Observaciones", "textarea"],
   ["reviewedBy", "Revisado por (QA Lead)", "OWNER"],

@@ -225,6 +225,7 @@ model TestCase {
   observations         String?
   requirementRef       String?
   sprint               String?
+  defectRef            String?
   origin               String       @default("IMPORT")
   createdAt            DateTime     @default(now())
   updatedAt            DateTime     @default(now()) @updatedAt
