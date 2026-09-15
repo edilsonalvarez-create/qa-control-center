@@ -115,8 +115,9 @@ function selectOptions(list: string[], current: string) {
 }
 
 /**
- * Shared create/edit drawer for Matriz QA and Test Cases. Manual cases are
- * writable from either panel against the same TestCase row.
+ * Shared create/edit drawer for Matriz QA and Test Cases. Form-created and
+ * imported cases write back to the same TestCase row; the table refreshes
+ * from the PATCH/POST response so the change is visible immediately.
  */
 export function CaseFormDrawer({
   target,
@@ -127,7 +128,7 @@ export function CaseFormDrawer({
   target: MatrixCase | "new" | null;
   saveTo: "matrix" | "cases";
   onClose: () => void;
-  onSaved: () => Promise<void> | void;
+  onSaved: (saved?: MatrixCase | null) => Promise<void> | void;
 }) {
   const [form, setForm] = useState<Record<string, string> | null>(null);
   const [catalog, setCatalog] = useState<CatalogItem[]>([]);
@@ -137,6 +138,7 @@ export function CaseFormDrawer({
   const [busy, setBusy] = useState(false);
 
   const editingId = target && target !== "new" ? target.id : null;
+  const lockProject = Boolean(editingId && target && target !== "new" && target.origin === "IMPORT");
 
   useEffect(() => {
     if (!target) {
@@ -184,13 +186,14 @@ export function CaseFormDrawer({
     try {
       const payload: Record<string, string> = {};
       for (const [k, v] of Object.entries(form)) if (v !== "") payload[k] = v;
+      let saved: MatrixCase;
       if (editingId) {
         const path = saveTo === "cases" ? `/api/v1/test-cases/${editingId}` : `/api/v1/matrix/cases/${editingId}`;
-        await api(path, { method: "PATCH", body: JSON.stringify(payload) });
+        saved = await api<MatrixCase>(path, { method: "PATCH", body: JSON.stringify(payload) });
       } else {
-        await api("/api/v1/matrix/cases", { method: "POST", body: JSON.stringify(payload) });
+        saved = await api<MatrixCase>("/api/v1/matrix/cases", { method: "POST", body: JSON.stringify(payload) });
       }
-      await onSaved();
+      await onSaved(saved);
       onClose();
     } catch (e) {
       setError((e as Error).message);
@@ -228,6 +231,7 @@ export function CaseFormDrawer({
                     className="mt-1 w-full rounded-lg border border-slate-200 bg-white px-2 py-1.5 dark:border-slate-700 dark:bg-slate-950"
                     value={value}
                     onChange={(e) => set(e.target.value)}
+                    disabled={lockProject}
                     required
                   >
                     <option value="">— Selecciona —</option>
@@ -237,6 +241,11 @@ export function CaseFormDrawer({
                       </option>
                     ))}
                   </select>
+                  {lockProject && (
+                    <p className="mt-1 text-xs text-slate-400">
+                      El proyecto de un caso importado queda en el run original; el resto de campos sí se actualizan.
+                    </p>
+                  )}
                 </label>
               );
             }

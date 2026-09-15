@@ -19,6 +19,15 @@ export function deriveRunStatus(counts: { passed: number; failed: number; blocke
   return RunStatus.UNKNOWN;
 }
 
+/**
+ * Hand-entered Matriz QA rows live on a reusable MANUAL container run.
+ * Imported Excel rows stay on their original import run so a field edit
+ * does not move them (or their siblings) into a different container.
+ */
+export function usesManualRunContainer(origin: string): boolean {
+  return origin === "MANUAL";
+}
+
 /** Stable key for the "container" run that holds manual cases of a project+module+cycle. */
 export function manualRunFingerprint(projectId: string, moduleName?: string | null, cycle?: string | null): string {
   const mod = (moduleName ?? "").trim().toLowerCase();

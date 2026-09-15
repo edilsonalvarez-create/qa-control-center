@@ -111,7 +111,7 @@ export function CasesPage() {
     <div className="card overflow-x-auto">
       <h2 className="mb-3 text-xl font-bold">Test Cases</h2>
       <p className="mb-3 text-sm text-slate-500">
-        Incluye los casos creados en Matriz QA (también los pendientes). Los manuales se editan aquí mismo.
+        Incluye los casos creados o importados en Matriz QA (también los pendientes). Edítalos aquí o en Matriz QA.
       </p>
       <table className="w-full text-sm">
         <thead>
@@ -160,11 +160,9 @@ export function CasesPage() {
               </td>
               {canEdit && (
                 <td>
-                  {c.origin === "MANUAL" && (
-                    <button className="text-slate-400 hover:text-cyan-600" aria-label="Editar" onClick={() => setDrawer(c)}>
-                      <Pencil size={14} />
-                    </button>
-                  )}
+                  <button className="text-slate-400 hover:text-cyan-600" aria-label="Editar" onClick={() => setDrawer(c)}>
+                    <Pencil size={14} />
+                  </button>
                 </td>
               )}
             </tr>

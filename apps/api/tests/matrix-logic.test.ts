@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { CaseStatus, RunStatus } from "@prisma/client";
-import { deriveRunStatus, manualRunFingerprint, toCaseStatus } from "../src/services/matrix-logic.js";
+import { deriveRunStatus, manualRunFingerprint, toCaseStatus, usesManualRunContainer } from "../src/services/matrix-logic.js";
 import { asCase, asEnv, asSev, asTestType } from "../src/parsers/enums.js";
 import { mapSeverity } from "../src/parsers/normalize.js";
 
@@ -27,6 +27,13 @@ describe("deriveRunStatus", () => {
     expect(deriveRunStatus({ passed: 3, failed: 0, blocked: 2 })).toBe(RunStatus.BLOCKED);
     expect(deriveRunStatus({ passed: 3, failed: 0, blocked: 0 })).toBe(RunStatus.PASSED);
     expect(deriveRunStatus({ passed: 0, failed: 0, blocked: 0 })).toBe(RunStatus.UNKNOWN);
+  });
+});
+
+describe("usesManualRunContainer", () => {
+  it("keeps imported cases on their original run", () => {
+    expect(usesManualRunContainer("MANUAL")).toBe(true);
+    expect(usesManualRunContainer("IMPORT")).toBe(false);
   });
 });
 
