@@ -3,7 +3,7 @@ import { z } from "zod";
 import { prisma } from "../lib/prisma.js";
 import { asEnv, asSev, asTestType } from "../parsers/enums.js";
 import { fingerprint, mapSeverity } from "../parsers/normalize.js";
-import { deriveRunStatus, manualRunFingerprint, toCaseStatus } from "./matrix-logic.js";
+import { deriveRunStatus, manualRunFingerprint, toCaseStatus, usesManualRunContainer } from "./matrix-logic.js";
 import { commitImport, createPreview } from "./import-service.js";
 import type { FilterQuery } from "../lib/filters.js";
 
@@ -11,8 +11,8 @@ import type { FilterQuery } from "../lib/filters.js";
  * "Matriz QA" module: lets QA register / edit / delete test cases by hand and
  * upload the standard matrix workbook. Everything is written into the same
  * TestCase / TestRun / Defect tables the dashboards already aggregate from, so
- * the other panels update automatically. Only rows with origin === "MANUAL"
- * can be edited or deleted here; imported rows are read-only.
+ * the other panels update automatically. Form-created and imported rows can
+ * both be edited; only origin === "MANUAL" rows can be deleted here.
  */
 
 const caseInclude = {
@@ -167,6 +167,28 @@ async function ensureManualRun(opts: {
     },
   });
   return { id: run.id, projectId: project.id, moduleId };
+}
+
+/**
+ * Keep an imported case on its Excel/Drive run. Module name can still change
+ * on the case (and we upsert the Module row for filters) without relocating
+ * sibling rows to a Matriz container.
+ */
+async function ensureImportedCaseStayOnRun(
+  existing: { testRunId: string; testRun: { projectId: string; moduleId: string | null } },
+  moduleName?: string | null,
+): Promise<{ id: string; projectId: string; moduleId: string | null }> {
+  const projectId = existing.testRun.projectId;
+  const name = clean(moduleName ?? undefined);
+  if (!name) {
+    return { id: existing.testRunId, projectId, moduleId: existing.testRun.moduleId };
+  }
+  const mod = await prisma.module.upsert({
+    where: { projectId_name: { projectId, name } },
+    update: {},
+    create: { projectId, name },
+  });
+  return { id: existing.testRunId, projectId, moduleId: mod.id };
 }
 
 /** Seed TestRun.version / environment from the form payload (no longer stored on TestCase). */
@@ -340,23 +362,22 @@ export async function createManualCase(raw: unknown, userId: string) {
 export async function updateManualCase(id: string, raw: unknown, userId: string) {
   const existing = await prisma.testCase.findUnique({ where: { id }, include: { testRun: true } });
   if (!existing) throw err("Caso no encontrado", 404);
-  if (existing.origin !== "MANUAL") {
-    throw err("Solo se pueden editar los casos creados manualmente en Matriz QA", 403);
-  }
   const input = caseInput.partial().parse(raw);
 
   const projectId = input.projectId ?? existing.testRun.projectId;
   const moduleName = input.moduleName !== undefined ? input.moduleName : existing.moduleName;
   const cycle = input.cycle !== undefined ? input.cycle : existing.cycle;
   const oldRunId = existing.testRunId;
-  const run = await ensureManualRun({
-    projectId,
-    moduleName,
-    cycle,
-    type: input.type ?? existing.type,
-    environment: input.environment ?? existing.testRun.environment,
-    executor: input.executor ?? existing.executor,
-  });
+  const run = usesManualRunContainer(existing.origin)
+    ? await ensureManualRun({
+        projectId,
+        moduleName,
+        cycle,
+        type: input.type ?? existing.type,
+        environment: input.environment ?? existing.testRun.environment,
+        executor: input.executor ?? existing.executor,
+      })
+    : await ensureImportedCaseStayOnRun(existing, moduleName);
 
   await applyRunSeeds(run.id, input);
 

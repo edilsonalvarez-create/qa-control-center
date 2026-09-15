@@ -26,6 +26,23 @@ export function MatrixPage() {
     setRows(cases);
   }
 
+  async function handleSaved(saved?: MatrixCase | null) {
+    if (saved?.id) {
+      setRows((prev) => {
+        const i = prev.findIndex((r) => r.id === saved.id);
+        if (i < 0) return [saved, ...prev];
+        const next = [...prev];
+        next[i] = saved;
+        return next;
+      });
+    }
+    try {
+      await reload();
+    } catch (e) {
+      setError((e as Error).message);
+    }
+  }
+
   useEffect(() => {
     reload().catch((e) => setError((e as Error).message));
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -89,8 +106,8 @@ export function MatrixPage() {
         <div>
           <h2 className="text-2xl font-bold">Matriz QA</h2>
           <p className="max-w-2xl text-sm text-slate-500">
-            Registro manual de casos de prueba. Todo lo que se guarda aquí alimenta Dashboard, Coverage,
-            Defects y Timeline. Los casos que entran por Import Center / Drive se muestran en solo lectura.
+            Registro e importación de casos de prueba. Crea, importa y edita aquí: al guardar, Dashboard,
+            Coverage, Defects y Timeline se actualizan con el mismo registro.
           </p>
         </div>
         {canEdit && (
@@ -160,7 +177,19 @@ export function MatrixPage() {
                   <td className="py-2 pr-3">{c.externalId ?? "—"}</td>
                   <td className="pr-3">{c.testRun?.project?.name ?? "—"}</td>
                   <td className="pr-3">{c.moduleName ?? c.testRun?.module?.name ?? "—"}</td>
-                  <td className="max-w-xs pr-3">{c.title}</td>
+                  <td className="max-w-xs pr-3">
+                    {canEdit ? (
+                      <button
+                        type="button"
+                        className="text-left text-cyan-700 hover:underline dark:text-cyan-400"
+                        onClick={() => setDrawer(c)}
+                      >
+                        {c.title}
+                      </button>
+                    ) : (
+                      c.title
+                    )}
+                  </td>
                   <td className="pr-3">{c.type}</td>
                   <td className="pr-3">{c.priority ?? "—"}</td>
                   <td className="pr-3">
@@ -180,14 +209,16 @@ export function MatrixPage() {
                     </span>
                   </td>
                   <td className="pr-1">
-                    {canEdit && c.origin === "MANUAL" && (
+                    {canEdit && (
                       <div className="flex gap-2">
                         <button className="text-slate-400 hover:text-cyan-600" aria-label="Editar" onClick={() => setDrawer(c)}>
                           <Pencil size={14} />
                         </button>
-                        <button className="text-slate-400 hover:text-rose-500" aria-label="Eliminar" onClick={() => remove(c)}>
-                          <Trash2 size={14} />
-                        </button>
+                        {c.origin === "MANUAL" && (
+                          <button className="text-slate-400 hover:text-rose-500" aria-label="Eliminar" onClick={() => remove(c)}>
+                            <Trash2 size={14} />
+                          </button>
+                        )}
                       </div>
                     )}
                   </td>
@@ -198,7 +229,7 @@ export function MatrixPage() {
         </div>
       )}
 
-      <CaseFormDrawer target={drawer} saveTo="matrix" onClose={() => setDrawer(null)} onSaved={reload} />
+      <CaseFormDrawer target={drawer} saveTo="matrix" onClose={() => setDrawer(null)} onSaved={handleSaved} />
     </div>
   );
 }
