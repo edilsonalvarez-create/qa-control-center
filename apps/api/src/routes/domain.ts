@@ -93,6 +93,26 @@ export async function domainRoutes(app: FastifyInstance) {
     return run;
   });
 
+  app.patch(
+    "/api/v1/test-runs/:id",
+    { preHandler: [app.authenticate, requireModule("runs"), app.requireQa] },
+    async (request, reply) => {
+      const { id } = request.params as { id: string };
+      const body = z
+        .object({ goNoGo: z.enum(["GO", "NO_GO"]).nullable() })
+        .safeParse(request.body);
+      if (!body.success) return reply.code(400).send({ error: "Invalid payload" });
+      const existing = await prisma.testRun.findUnique({ where: { id } });
+      if (!existing) return reply.code(404).send({ error: "Not found" });
+      const run = await prisma.testRun.update({ where: { id }, data: { goNoGo: body.data.goNoGo } });
+      const user = request.user as { sub: string };
+      await prisma.auditLog.create({
+        data: { userId: user.sub, action: "TEST_RUN_UPDATE", entity: "TestRun", entityId: id, payload: body.data },
+      });
+      return run;
+    },
+  );
+
   app.delete(
     "/api/v1/test-runs/:id",
     { preHandler: [app.authenticate, requireModule("runs"), requirePermission("delete")] },
