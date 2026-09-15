@@ -17,6 +17,7 @@ import { permissionsRoutes } from "./routes/permissions.js";
 import { driveRoutes } from "./routes/drive.js";
 import { startDriveSyncScheduler } from "./jobs/drive-cron.js";
 import { repairProjectAttribution } from "./services/project-attribution.js";
+import { repairManualRunGrouping } from "./services/matrix-service.js";
 
 async function build() {
   const config = loadConfig();
@@ -84,6 +85,9 @@ try {
   logger.info(`API listening on ${config.PORT}`);
   startDriveSyncScheduler(config);
   repairProjectAttribution().catch((err) => logger.error({ err }, "project attribution repair failed"));
+  repairManualRunGrouping()
+    .then((moved) => moved && logger.info({ moved }, "split manual cases that were merged into the wrong run"))
+    .catch((err) => logger.error({ err }, "manual run grouping repair failed"));
 } catch (err) {
   logger.error({ err }, "failed to listen");
   process.exit(1);

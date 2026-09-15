@@ -125,13 +125,17 @@ async function assertProject(projectId: string) {
 }
 
 /**
- * One "container" TestRun per project + module + cycle for manual cases.
- * Reused across writes so the matrix does not spawn a run per case.
+ * One "container" TestRun per manual case, unless the QA sets an explicit
+ * Ciclo to batch several cases into one execution — see manualRunFingerprint.
+ * `caseIdentity` (externalId, falling back to the title) is what keeps a
+ * cycle-less case's edits resolving back to its own run instead of scattering
+ * across new ones.
  */
 async function ensureManualRun(opts: {
   projectId: string;
   moduleName?: string | null;
   cycle?: string | null;
+  caseIdentity?: string | null;
   type?: string | null;
   environment?: string | null;
   executor?: string | null;
@@ -147,7 +151,7 @@ async function ensureManualRun(opts: {
     });
     moduleId = mod.id;
   }
-  const fingerprint = manualRunFingerprint(project.id, moduleName, opts.cycle);
+  const fingerprint = manualRunFingerprint(project.id, moduleName, opts.cycle, opts.caseIdentity);
   const existing = await prisma.testRun.findFirst({ where: { fingerprint, origin: "MANUAL" } });
   if (existing) {
     if (moduleId && existing.moduleId !== moduleId) {
@@ -244,6 +248,56 @@ async function recomputeRun(runId: string) {
 }
 
 /**
+ * One-off repair for data written before manual runs were keyed by case
+ * identity (see manualRunFingerprint's doc comment): the old default
+ * (cycle-less cases sharing project+module fell into one "cycle 1" bucket)
+ * silently merged unrelated cases — e.g. a GerdQ scale validation and a
+ * PHQ-4 one — into a single Test Run just because they lived under the same
+ * module. Run once at boot (mirrors repairProjectAttribution): moves every
+ * manual case that isn't already in the run its current fields resolve to
+ * under the new scheme, reusing the same lookup normal writes use, then
+ * recomputes every touched run (which deletes any left empty).
+ */
+export async function repairManualRunGrouping(): Promise<number> {
+  const cases = await prisma.testCase.findMany({
+    where: { origin: "MANUAL" },
+    include: { testRun: true },
+  });
+  const touched = new Set<string>();
+  let moved = 0;
+  for (const c of cases) {
+    if (c.testRun.origin !== "MANUAL") continue;
+    const correctFingerprint = manualRunFingerprint(
+      c.testRun.projectId,
+      c.moduleName,
+      c.cycle,
+      c.externalId || c.title,
+    );
+    if (c.testRun.fingerprint === correctFingerprint) continue;
+    const target = await ensureManualRun({
+      projectId: c.testRun.projectId,
+      moduleName: c.moduleName,
+      cycle: c.cycle,
+      caseIdentity: c.externalId || c.title,
+      type: c.type,
+      executor: c.executor,
+    });
+    if (target.id === c.testRunId) continue;
+    const oldRunId = c.testRunId;
+    await prisma.testCase.update({ where: { id: c.id }, data: { testRunId: target.id } });
+    await prisma.defect.updateMany({ where: { testCaseId: c.id }, data: { testRunId: target.id } });
+    await prisma.evidence.updateMany({ where: { testCaseId: c.id }, data: { testRunId: target.id } });
+    touched.add(oldRunId);
+    touched.add(target.id);
+    moved += 1;
+  }
+  for (const runId of touched) {
+    await recomputeRun(runId);
+  }
+  return moved;
+}
+
+/**
  * Keep a case's auto-managed defect in sync with its current FAIL state —
  * for both manually-entered AND imported cases (import already creates one
  * with origin "IMPORT" when a row is FAIL; editing that case later must find
@@ -324,6 +378,7 @@ export async function createManualCase(raw: unknown, userId: string) {
     projectId: input.projectId,
     moduleName: input.moduleName,
     cycle: input.cycle,
+    caseIdentity: input.externalId || input.title,
     type: input.type,
     environment: input.environment,
     executor: input.executor,
@@ -377,12 +432,15 @@ export async function updateManualCase(id: string, raw: unknown, userId: string)
   const projectId = input.projectId ?? existing.testRun.projectId;
   const moduleName = input.moduleName !== undefined ? input.moduleName : existing.moduleName;
   const cycle = input.cycle !== undefined ? input.cycle : existing.cycle;
+  const externalId = input.externalId !== undefined ? input.externalId : existing.externalId;
+  const title = input.title !== undefined ? input.title : existing.title;
   const oldRunId = existing.testRunId;
   const run = usesManualRunContainer(existing.origin)
     ? await ensureManualRun({
         projectId,
         moduleName,
         cycle,
+        caseIdentity: externalId || title,
         type: input.type ?? existing.type,
         environment: input.environment ?? existing.testRun.environment,
         executor: input.executor ?? existing.executor,

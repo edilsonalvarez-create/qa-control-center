@@ -28,9 +28,27 @@ export function usesManualRunContainer(origin: string): boolean {
   return origin === "MANUAL";
 }
 
-/** Stable key for the "container" run that holds manual cases of a project+module+cycle. */
-export function manualRunFingerprint(projectId: string, moduleName?: string | null, cycle?: string | null): string {
+/**
+ * Stable key for the "container" run a manual case belongs to.
+ *
+ * When the QA sets an explicit `cycle` (e.g. "Sprint 24"), that's a deliberate
+ * signal to batch several cases into one execution — group by project+module+
+ * cycle as before. Without one, cases must NOT be merged just for sharing a
+ * module: two cases can test completely different things (GerdQ vs PHQ-4)
+ * while both living under "Historia Clínica". Each such case gets its own
+ * run, keyed by its own identity (externalId, falling back to its title) so
+ * re-editing the same case still resolves to the same run instead of
+ * spawning a new one every time.
+ */
+export function manualRunFingerprint(
+  projectId: string,
+  moduleName?: string | null,
+  cycle?: string | null,
+  caseIdentity?: string | null,
+): string {
   const mod = (moduleName ?? "").trim().toLowerCase();
-  const cyc = ((cycle ?? "").trim() || "1").toLowerCase();
-  return `manual|${projectId}|${mod}|${cyc}`;
+  const cyc = (cycle ?? "").trim().toLowerCase();
+  if (cyc) return `manual|${projectId}|${mod}|cycle:${cyc}`;
+  const identity = (caseIdentity ?? "").trim().toLowerCase();
+  return `manual|${projectId}|${mod}|case:${identity}`;
 }

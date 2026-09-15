@@ -38,10 +38,23 @@ describe("usesManualRunContainer", () => {
 });
 
 describe("manualRunFingerprint", () => {
-  it("is stable across casing / spacing and defaults the cycle", () => {
-    expect(manualRunFingerprint("p1", "Incapacidades", "1")).toBe("manual|p1|incapacidades|1");
-    expect(manualRunFingerprint("p1", " incapacidades ", null)).toBe("manual|p1|incapacidades|1");
-    expect(manualRunFingerprint("p1", null, "Ciclo 2")).toBe("manual|p1||ciclo 2");
+  it("groups by cycle when the QA sets one explicitly, stable across casing/spacing", () => {
+    expect(manualRunFingerprint("p1", "Incapacidades", "1")).toBe("manual|p1|incapacidades|cycle:1");
+    expect(manualRunFingerprint("p1", " incapacidades ", "1")).toBe("manual|p1|incapacidades|cycle:1");
+    expect(manualRunFingerprint("p1", null, "Ciclo 2")).toBe("manual|p1||cycle:ciclo 2");
+  });
+
+  it("without a cycle, keys by the case's own identity so different cases never merge", () => {
+    expect(manualRunFingerprint("p1", "Historia Clinica", null, "RESUMEN-GERDQ-001")).toBe(
+      "manual|p1|historia clinica|case:resumen-gerdq-001",
+    );
+    expect(manualRunFingerprint("p1", "Historia Clinica", null, "RESU-PHQ4-001")).not.toBe(
+      manualRunFingerprint("p1", "Historia Clinica", null, "RESUMEN-GERDQ-001"),
+    );
+    // re-editing the same case (same identity) resolves back to the same run
+    expect(manualRunFingerprint("p1", "Historia Clinica", undefined, "RESUMEN-GERDQ-001")).toBe(
+      manualRunFingerprint("p1", "Historia Clinica", null, "RESUMEN-GERDQ-001"),
+    );
   });
 });
 
