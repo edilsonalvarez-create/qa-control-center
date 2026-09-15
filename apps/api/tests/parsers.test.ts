@@ -309,6 +309,15 @@ describe("project from Drive folder", () => {
     ).toBe("MEDICINA INTEGRAL");
   });
 
+  it("defaults the module to Historia Clínica for clinical-scale filenames (incl. underscore-joined)", () => {
+    // Real filenames from the Drive sync: underscore sits directly against the
+    // scale name, so a \b-based regex tested raw against the filename misses
+    // it (underscore is a \w char, no boundary there) — must normalize first.
+    expect(inferFromFileName("Ecala_Gerdq.xlsx").moduleName).toBe("Historia Clínica");
+    expect(inferFromFileName("Ecala_Phq-4.xlsx").moduleName).toBe("Historia Clínica");
+    expect(inferFromFileName("Cuestionario_Stop_Bang.xlsx").moduleName).toBe("Historia Clínica");
+  });
+
   it("normalizes client aliases from the standard matrix", () => {
     expect(normalizeProjectName("SUMI (Sumimedical)")).toBe("SUMIMEDICAL");
     expect(normalizeProjectName("MEDICINA INTEGRAL")).toBe("MEDICINA INTEGRAL");
