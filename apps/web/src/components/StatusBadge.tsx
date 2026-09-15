@@ -18,6 +18,8 @@ export function StatusBadge({ value }: { value: string }) {
     FAILING: "bg-rose-500/15 text-rose-700 dark:text-rose-300",
     UNTESTED: "bg-slate-800/80 text-slate-200",
     REQUIRES_REVIEW: "bg-violet-500/15 text-violet-800 dark:text-violet-300",
+    GO: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300",
+    NO_GO: "bg-rose-500/15 text-rose-700 dark:text-rose-300",
     UNKNOWN: "bg-slate-500/15 text-slate-600 dark:text-slate-300",
   };
   return (

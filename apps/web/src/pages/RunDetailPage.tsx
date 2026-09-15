@@ -5,7 +5,12 @@ import { api } from "../lib/api";
 import { useAuth } from "../lib/auth";
 import { hasPermission } from "../lib/permissions";
 import { formatDateOnly } from "../lib/dates";
+import { GoNoGoCell } from "../components/GoNoGo";
 import { StatusBadge } from "../components/StatusBadge";
+
+function canEditRole(role?: string) {
+  return role === "ADMIN" || role === "QA_MANAGER" || role === "QA";
+}
 
 export function RunDetailPage() {
   const { id } = useParams();
@@ -14,10 +19,14 @@ export function RunDetailPage() {
   const [run, setRun] = useState<any>(null);
   const [error, setError] = useState("");
 
-  useEffect(() => {
+  const reload = () =>
     api(`/api/v1/test-runs/${id}`)
       .then(setRun)
-      .catch((e) => setError(e.message));
+      .catch((e) => setError((e as Error).message));
+
+  useEffect(() => {
+    reload();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
   async function removeRun() {
@@ -59,7 +68,7 @@ export function RunDetailPage() {
           </button>
         )}
       </div>
-      <div className="grid gap-3 md:grid-cols-4">
+      <div className="grid gap-3 md:grid-cols-5">
         {[
           ["QA", run.tester ?? "Unknown"],
           ["Ambiente", run.environment],
@@ -71,6 +80,12 @@ export function RunDetailPage() {
             <p className="font-medium">{v}</p>
           </div>
         ))}
+        <div className="card">
+          <p className="text-xs text-slate-500">Go / No Go</p>
+          <div className="mt-1">
+            <GoNoGoCell run={run} canEdit={canEditRole(user?.role)} onChanged={reload} size="md" />
+          </div>
+        </div>
       </div>
       <div className="grid grid-cols-5 gap-3">
         {(["totalTests", "passed", "failed", "blocked", "skipped"] as const).map((k) => (

@@ -6,6 +6,7 @@ import { useAuth } from "../lib/auth";
 import { useFilters } from "../lib/filters";
 import { hasPermission } from "../lib/permissions";
 import { formatDateOnly } from "../lib/dates";
+import { GoNoGoCell } from "../components/GoNoGo";
 import { CoverageDot, StatusBadge } from "../components/StatusBadge";
 import { EmptyState } from "../components/EmptyState";
 
@@ -20,11 +21,16 @@ function useApiList<T>(path: string, deps: unknown[] = []) {
   return { rows, error, reload };
 }
 
+function canEditRole(role?: string) {
+  return role === "ADMIN" || role === "QA_MANAGER" || role === "QA";
+}
+
 export function RunsPage() {
   const { user } = useAuth();
   const { query } = useFilters();
   const { rows, error, reload } = useApiList<any>(`/api/v1/test-runs${toQuery(query)}`, [query]);
   const canDelete = hasPermission(user, "delete");
+  const canEdit = canEditRole(user?.role);
 
   async function removeRun(r: any) {
     if (
@@ -58,6 +64,7 @@ export function RunsPage() {
             <th>Total</th>
             <th>P/F/B/S</th>
             <th>Estado</th>
+            <th>Go / No Go</th>
             {canDelete && <th></th>}
           </tr>
         </thead>
@@ -79,6 +86,9 @@ export function RunsPage() {
               </td>
               <td>
                 <StatusBadge value={r.status} />
+              </td>
+              <td>
+                <GoNoGoCell run={r} canEdit={canEdit} onChanged={reload} />
               </td>
               {canDelete && (
                 <td>

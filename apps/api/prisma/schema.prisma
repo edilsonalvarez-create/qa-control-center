@@ -179,6 +179,10 @@ model TestRun {
   durationSec   Int?
   status        RunStatus   @default(UNKNOWN)
   observations  String?
+  /// QA release-readiness call for this run: "GO" | "NO_GO" | null (not yet
+  /// decided). Starts as a suggestion derived from `status` in the UI; once
+  /// a QA sets it explicitly it's never recomputed automatically.
+  goNoGo        String?
   origin        String      @default("IMPORT")
   fingerprint   String?
   sourceFileId  String?
