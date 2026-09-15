@@ -29,6 +29,16 @@ export function usesManualRunContainer(origin: string): boolean {
 }
 
 /**
+ * True only when the QA typed a real batch label. Blank and the legacy
+ * default `"1"` (old manualRunFingerprint filled that in) are NOT a cycle:
+ * they used to glue every Historia Clínica case into one Test Run.
+ */
+export function isExplicitCycle(cycle?: string | null): boolean {
+  const cyc = (cycle ?? "").trim().toLowerCase();
+  return Boolean(cyc) && cyc !== "1";
+}
+
+/**
  * Stable key for the "container" run a manual case belongs to.
  *
  * When the QA sets an explicit `cycle` (e.g. "Sprint 24"), that's a deliberate
@@ -47,8 +57,9 @@ export function manualRunFingerprint(
   caseIdentity?: string | null,
 ): string {
   const mod = (moduleName ?? "").trim().toLowerCase();
-  const cyc = (cycle ?? "").trim().toLowerCase();
-  if (cyc) return `manual|${projectId}|${mod}|cycle:${cyc}`;
+  if (isExplicitCycle(cycle)) {
+    return `manual|${projectId}|${mod}|cycle:${(cycle ?? "").trim().toLowerCase()}`;
+  }
   const identity = (caseIdentity ?? "").trim().toLowerCase();
   return `manual|${projectId}|${mod}|case:${identity}`;
 }
