@@ -6,7 +6,13 @@ import { permissionsForRole } from "../lib/permissions.js";
 
 export async function authRoutes(app: FastifyInstance) {
   app.post("/api/v1/auth/login", async (request, reply) => {
-    const body = z.object({ email: z.string().email(), password: z.string().min(1) }).safeParse(request.body);
+    const raw = request.body as { email?: unknown; password?: unknown };
+    const body = z
+      .object({ email: z.string().email(), password: z.string().min(1) })
+      .safeParse({
+        email: typeof raw?.email === "string" ? raw.email.trim().toLowerCase() : raw?.email,
+        password: raw?.password,
+      });
     if (!body.success) return reply.code(400).send({ error: "Invalid payload" });
     const user = await prisma.user.findUnique({ where: { email: body.data.email } });
     if (!user || !user.active) return reply.code(401).send({ error: "Invalid credentials" });

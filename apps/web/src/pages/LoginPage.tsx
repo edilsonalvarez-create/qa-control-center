@@ -5,7 +5,7 @@ import { useAuth } from "../lib/auth";
 export function LoginPage() {
   const { login } = useAuth();
   const nav = useNavigate();
-  const [email, setEmail] = useState("admin@qacc.local");
+  const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
 
@@ -17,7 +17,7 @@ export function LoginPage() {
           e.preventDefault();
           setError("");
           try {
-            await login(email, password);
+            await login(email.trim(), password);
             nav("/");
           } catch (err) {
             setError((err as Error).message);
@@ -28,7 +28,14 @@ export function LoginPage() {
         <h1 className="mt-2 text-2xl font-bold">QA Control Center</h1>
         <p className="mt-2 text-sm text-slate-400">Estado de pruebas, defectos y evidencias — sin datos inventados.</p>
         <label className="mt-6 block text-sm">Email</label>
-        <input className="mt-1 w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2" value={email} onChange={(e) => setEmail(e.target.value)} />
+        <input
+          className="mt-1 w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2"
+          type="email"
+          autoComplete="username"
+          placeholder="correo@sumimedical.com"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+        />
         <label className="mt-4 block text-sm">Password</label>
         <input type="password" className="mt-1 w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2" value={password} onChange={(e) => setPassword(e.target.value)} />
         {error && <p className="mt-3 text-sm text-rose-400">{error}</p>}
