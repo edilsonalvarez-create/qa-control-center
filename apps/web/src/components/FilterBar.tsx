@@ -23,7 +23,7 @@ function optionsFor(catalog: string[] | undefined, fallback: string[], current?:
 export function FilterBar() {
   const { filters, setFilters } = useFilters();
   const { pathname } = useLocation();
-  const scope = pathname === "/" ? "informative" : "executed";
+  const scope = pathname === "/" ? "informative" : pathname === "/matrix" || pathname === "/cases" || pathname.startsWith("/runs") ? "panel" : "executed";
   const [projects, setProjects] = useState<Project[]>([]);
   const [modules, setModules] = useState<Module[]>([]);
   const [modulesReady, setModulesReady] = useState(false);

@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
-import { Trash2 } from "lucide-react";
+import { Pencil, Trash2 } from "lucide-react";
 import { api, toQuery } from "../lib/api";
 import { useAuth } from "../lib/auth";
 import { useFilters } from "../lib/filters";
@@ -10,6 +10,7 @@ import { useApiList } from "../hooks/useApiList";
 import { GoNoGoCell } from "../components/GoNoGo";
 import { CoverageDot, StatusBadge } from "../components/StatusBadge";
 import { EmptyState } from "../components/EmptyState";
+import { CaseFormDrawer } from "../components/CaseFormDrawer";
 
 export function RunsPage() {
   const { user } = useAuth();
@@ -96,13 +97,22 @@ export function RunsPage() {
 }
 
 export function CasesPage() {
+  const { user } = useAuth();
   const { query } = useFilters();
-  const { rows, error } = useApiList<any>(`/api/v1/test-cases${toQuery(query)}`, [query]);
+  const { rows, error, reload } = useApiList<any>(`/api/v1/test-cases${toQuery(query)}`, [query]);
+  const canEdit = canEditRole(user?.role);
+  const [drawer, setDrawer] = useState<any>(null);
+
   if (error) return <p className="text-rose-500">{error}</p>;
-  if (!rows.length) return <EmptyState title="Sin casos ejecutados" hint="Los casos pendientes por testear se ven en el Dashboard. Los registros sin información no se listan." />;
+  if (!rows.length) {
+    return <EmptyState title="Sin casos" hint="Crea casos en Matriz QA o importa una matriz. Los registros vacíos no se listan." />;
+  }
   return (
     <div className="card overflow-x-auto">
       <h2 className="mb-3 text-xl font-bold">Test Cases</h2>
+      <p className="mb-3 text-sm text-slate-500">
+        Incluye los casos creados en Matriz QA (también los pendientes). Los manuales se editan aquí mismo.
+      </p>
       <table className="w-full text-sm">
         <thead>
           <tr className="text-left text-slate-500">
@@ -115,6 +125,8 @@ export function CasesPage() {
             <th>Estado</th>
             <th>Ejecutor</th>
             <th>Fecha</th>
+            <th>Origen</th>
+            {canEdit && <th></th>}
           </tr>
         </thead>
         <tbody>
@@ -135,10 +147,31 @@ export function CasesPage() {
               </td>
               <td>{c.executor ?? c.testRun?.tester ?? "—"}</td>
               <td>{formatDateOnly(c.executionDate)}</td>
+              <td>
+                <span
+                  className={`rounded-full px-2 py-0.5 text-xs font-semibold ${
+                    c.origin === "MANUAL"
+                      ? "bg-cyan-500/15 text-cyan-700 dark:text-cyan-300"
+                      : "bg-slate-500/15 text-slate-500"
+                  }`}
+                >
+                  {c.origin === "MANUAL" ? "Manual" : "Importado"}
+                </span>
+              </td>
+              {canEdit && (
+                <td>
+                  {c.origin === "MANUAL" && (
+                    <button className="text-slate-400 hover:text-cyan-600" aria-label="Editar" onClick={() => setDrawer(c)}>
+                      <Pencil size={14} />
+                    </button>
+                  )}
+                </td>
+              )}
             </tr>
           ))}
         </tbody>
       </table>
+      <CaseFormDrawer target={drawer} saveTo="cases" onClose={() => setDrawer(null)} onSaved={reload} />
     </div>
   );
 }
