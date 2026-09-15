@@ -3,6 +3,7 @@ import { CATALOG_CATEGORIES, type CatalogCategory } from "../parsers/catalog.js"
 import { parseUpload } from "../parsers/index.js";
 import { normalizeProjectName } from "../parsers/normalize.js";
 import { prisma } from "../lib/prisma.js";
+import { ensureProject } from "./project-service.js";
 
 export function isCatalogCategory(value: string): value is CatalogCategory {
   return (CATALOG_CATEGORIES as readonly string[]).includes(value);
@@ -34,17 +35,7 @@ export async function upsertCatalogItems(
 async function ensureProjectFromClient(raw: string) {
   const name = normalizeProjectName(raw) || raw.trim();
   if (!name) return;
-  const existing = await prisma.project.findUnique({ where: { name } });
-  if (existing) return;
-  await prisma.project.create({
-    data: {
-      name,
-      client: name,
-      product: name === "SANOVA" ? "Unknown" : "HORUS Health",
-      status: name === "SANOVA" ? "REQUIRES_REVIEW" : "ACTIVE",
-      description: "Created from catalog.",
-    },
-  });
+  await ensureProject(name);
 }
 
 export async function createCatalogItem(category: CatalogCategory, value: string) {

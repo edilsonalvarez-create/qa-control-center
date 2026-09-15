@@ -1,15 +1,7 @@
 import type { FastifyInstance } from "fastify";
-import { ZodError } from "zod";
+import { fail } from "../lib/http-errors.js";
 import { prisma } from "../lib/prisma.js";
 import { createUser, listUsers, updateUser } from "../services/user-service.js";
-
-function fail(reply: import("fastify").FastifyReply, error: unknown) {
-  if (error instanceof ZodError) {
-    return reply.code(400).send({ error: "Datos inválidos", details: error.issues });
-  }
-  const e = error as Error & { statusCode?: number };
-  return reply.code(e.statusCode ?? 500).send({ error: e.message || "Error interno" });
-}
 
 /** User management — creating users and assigning role + module permissions is ADMIN-only. */
 export async function usersRoutes(app: FastifyInstance) {

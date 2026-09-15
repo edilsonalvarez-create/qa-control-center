@@ -254,7 +254,10 @@ export async function domainRoutes(app: FastifyInstance) {
     return prisma.sourceFile.findMany({ include: { project: true }, orderBy: { createdAt: "desc" } });
   });
 
-  app.get("/api/v1/catalog", { preHandler: [app.authenticate, requireModule("catalog")] }, async () => {
+  // Read-only for any authenticated user (not module-gated): catalog values are
+  // reference data other modules' own selects/filters depend on (FilterBar,
+  // Matriz QA), not sensitive data — only managing the catalog stays gated below.
+  app.get("/api/v1/catalog", { preHandler: [app.authenticate] }, async () => {
     return listCatalog();
   });
 

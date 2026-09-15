@@ -1,21 +1,7 @@
-import { ProjectStatus } from "@prisma/client";
 import { logger } from "../lib/logger.js";
 import { prisma } from "../lib/prisma.js";
 import { resolveProjectName } from "../parsers/normalize.js";
-
-async function ensureProject(name: string) {
-  return prisma.project.upsert({
-    where: { name },
-    update: {},
-    create: {
-      name,
-      client: name,
-      product: name === "SANOVA" ? "Unknown" : "HORUS Health",
-      status: name === "SANOVA" ? ProjectStatus.REQUIRES_REVIEW : ProjectStatus.ACTIVE,
-      description: "Created when reassigning tests to the correct client.",
-    },
-  });
-}
+import { ensureProject } from "./project-service.js";
 
 export async function repairProjectAttribution() {
   let moved = 0;

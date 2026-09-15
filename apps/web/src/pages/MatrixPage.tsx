@@ -3,12 +3,27 @@ import { Pencil, Plus, Trash2, Upload, X } from "lucide-react";
 import { api, toQuery } from "../lib/api";
 import { useAuth } from "../lib/auth";
 import { useFilters } from "../lib/filters";
+import { canEditRole } from "../lib/permissions";
 import { formatDateOnly } from "../lib/dates";
 import { StatusBadge } from "../components/StatusBadge";
 import { EmptyState } from "../components/EmptyState";
 
 type Project = { id: string; name: string; client?: string | null };
 type CatalogItem = { id: string; category: string; value: string };
+type ModuleOption = { id: string; name: string };
+
+/** Catalog categories rendered as enforced selects in the manual-entry form (see FIELDS below). */
+const CATALOG_KINDS = new Set([
+  "TEST_TYPE",
+  "LEVEL",
+  "PRIORITY",
+  "AUTOMATABLE",
+  "TOOL",
+  "ENVIRONMENT",
+  "OWNER",
+  "EXEC_STATUS",
+  "SEVERITY",
+]);
 
 type MatrixCase = {
   id: string;
@@ -40,9 +55,16 @@ type MatrixCase = {
   requirementRef: string | null;
   release: string | null;
   sprint: string | null;
-  defectRef: string | null;
   executionDate: string | null;
-  testRun?: { id: string; project?: { id: string; name: string }; module?: { name: string } | null };
+  defects?: { severity: string; origin: string }[];
+  evidence?: { id: string; fileUrl: string | null }[];
+  testRun?: {
+    id: string;
+    version?: string | null;
+    environment?: string | null;
+    project?: { id: string; name: string };
+    module?: { name: string } | null;
+  };
 };
 
 // [field, label, catalog category | "textarea" | "date" | "url" | ""]
@@ -66,22 +88,17 @@ const FIELDS: Array<[keyof MatrixCase | "projectId", string, string]> = [
   ["steps", "Pasos de Ejecución", "textarea"],
   ["expected", "Resultado Esperado", "textarea"],
   ["expectedIntegration", "Resultado Esperado (Sistema Destino / Integración)", "textarea"],
-  ["environment", "Entorno Ejecutado", "ENVIRONMENT"],
+  ["environment", "Ambiente", "ENVIRONMENT"],
   ["executionDate", "Fecha Ejecución", "date"],
   ["executor", "Ejecutor", "OWNER"],
   ["cycle", "Ciclo", ""],
   ["actual", "Resultado Obtenido", "textarea"],
   ["status", "Estado", "EXEC_STATUS"],
   ["severity", "Severidad (si falla)", "SEVERITY"],
-  ["defectRef", "ID Defecto", ""],
   ["evidenceUrl", "Evidencia (link)", "url"],
   ["observations", "Observaciones", "textarea"],
   ["reviewedBy", "Revisado por (QA Lead)", "OWNER"],
 ];
-
-function canEditRole(role?: string) {
-  return role === "ADMIN" || role === "QA_MANAGER" || role === "QA";
-}
 
 const emptyForm = (): Record<string, string> =>
   Object.fromEntries(FIELDS.map(([k]) => [k, ""])) as Record<string, string>;
@@ -94,6 +111,7 @@ export function MatrixPage() {
   const [rows, setRows] = useState<MatrixCase[]>([]);
   const [catalog, setCatalog] = useState<CatalogItem[]>([]);
   const [projects, setProjects] = useState<Project[]>([]);
+  const [modules, setModules] = useState<ModuleOption[]>([]);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [form, setForm] = useState<Record<string, string> | null>(null);
@@ -123,6 +141,25 @@ export function MatrixPage() {
     return map;
   }, [catalog]);
 
+  // Module choices for the form are real Module rows scoped to the selected
+  // project (same pattern FilterBar uses) — not the flat, unscoped MODULE
+  // catalog category, since a module always belongs to one project.
+  const formProjectId = form?.projectId;
+  useEffect(() => {
+    if (!formProjectId) {
+      setModules([]);
+      return;
+    }
+    api<ModuleOption[]>(`/api/v1/modules${toQuery({ projectId: formProjectId })}`)
+      .then(setModules)
+      .catch(() => setModules([]));
+  }, [formProjectId]);
+
+  /** Options for a select field, always including the current value even if it fell out of the catalog/module list. */
+  function selectOptions(list: string[], current: string) {
+    return current && !list.includes(current) ? [current, ...list] : list;
+  }
+
   function openNew() {
     setEditingId(null);
     setForm(emptyForm());
@@ -130,9 +167,18 @@ export function MatrixPage() {
 
   function openEdit(c: MatrixCase) {
     const f = emptyForm();
+    // release/environment are no longer stored on the case itself (they seed
+    // the run's version/environment) — fall back to the run's current value
+    // so editing doesn't appear to blank them out. Same for severity: its
+    // real home is the auto-created Defect, so prefill from there.
+    const autoSeverity = c.defects?.find((d) => d.origin === "MANUAL_AUTO")?.severity;
     for (const [k] of FIELDS) {
       if (k === "projectId") f[k] = c.testRun?.project?.id ?? "";
       else if (k === "executionDate") f[k] = c.executionDate ? c.executionDate.slice(0, 10) : "";
+      else if (k === "release") f[k] = c.release ?? c.testRun?.version ?? "";
+      else if (k === "environment") f[k] = c.environment ?? c.testRun?.environment ?? "";
+      else if (k === "severity") f[k] = c.severity ?? autoSeverity ?? "";
+      else if (k === "evidenceUrl") f[k] = c.evidenceUrl ?? c.evidence?.[0]?.fileUrl ?? "";
       else f[k] = ((c as Record<string, unknown>)[k] as string | null) ?? "";
     }
     setEditingId(c.id);
@@ -400,6 +446,55 @@ export function MatrixPage() {
                         value={value}
                         onChange={(e) => set(e.target.value)}
                       />
+                    </label>
+                  );
+                }
+                if (key === "moduleName") {
+                  const options = selectOptions(modules.map((m) => m.name), value);
+                  return (
+                    <label key={k} className="text-sm">
+                      <span className="text-slate-500">{label}</span>
+                      <select
+                        className="mt-1 w-full rounded-lg border border-slate-200 bg-white px-2 py-1.5 dark:border-slate-700 dark:bg-slate-950"
+                        value={value}
+                        disabled={!form.projectId}
+                        onChange={(e) => set(e.target.value)}
+                      >
+                        <option value="">— Selecciona —</option>
+                        {options.map((o) => (
+                          <option key={o} value={o}>
+                            {o}
+                          </option>
+                        ))}
+                      </select>
+                      {!form.projectId && (
+                        <p className="mt-1 text-xs text-slate-400">Selecciona primero el Cliente / Proyecto.</p>
+                      )}
+                    </label>
+                  );
+                }
+                if (CATALOG_KINDS.has(kind)) {
+                  const options = selectOptions(optionsFor.get(kind) ?? [], value);
+                  return (
+                    <label key={k} className="text-sm">
+                      <span className="text-slate-500">{label}</span>
+                      <select
+                        className="mt-1 w-full rounded-lg border border-slate-200 bg-white px-2 py-1.5 dark:border-slate-700 dark:bg-slate-950"
+                        value={value}
+                        onChange={(e) => set(e.target.value)}
+                      >
+                        <option value="">— Selecciona —</option>
+                        {options.map((o) => (
+                          <option key={o} value={o}>
+                            {o}
+                          </option>
+                        ))}
+                      </select>
+                      {!options.length && (
+                        <p className="mt-1 text-xs text-slate-400">
+                          Sin valores en Catálogo todavía — agrégalos en Catálogo.
+                        </p>
+                      )}
                     </label>
                   );
                 }

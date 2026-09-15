@@ -1,17 +1,18 @@
 import {
   DefectStatus,
   Prisma,
-  RunStatus,
   type EvidenceType,
 } from "@prisma/client";
 import { prisma } from "../lib/prisma.js";
 import { parseUpload, type ParseResult } from "../parsers/index.js";
-import { looksLikeCopy, resolveProjectName } from "../parsers/normalize.js";
+import { fingerprint, looksLikeCopy, mapSeverity, resolveProjectName } from "../parsers/normalize.js";
 import { asCase, asEnv, asSev, asTestType } from "../parsers/enums.js";
 import { hasCaseInformation } from "../lib/case-info.js";
 import crypto from "node:crypto";
 import type { ParsedCase } from "../parsers/types.js";
 import { upsertCatalogItems } from "./catalog-service.js";
+import { ensureProject } from "./project-service.js";
+import { deriveRunStatus } from "./matrix-logic.js";
 
 function evidenceType(fileName: string): EvidenceType {
   const n = fileName.toLowerCase();
@@ -170,20 +171,6 @@ function buildPreview(
   };
 }
 
-async function ensureProject(name: string, product?: string) {
-  const existing = await prisma.project.findUnique({ where: { name } });
-  if (existing) return existing;
-  return prisma.project.create({
-    data: {
-      name,
-      client: name === "Unknown" ? "Unknown" : name,
-      product: product || (name === "SANOVA" ? "Unknown" : "HORUS Health"),
-      status: name === "Unknown" || name === "SANOVA" ? "REQUIRES_REVIEW" : "ACTIVE",
-      description: "Created from import. Requires review if name was inferred.",
-    },
-  });
-}
-
 async function persistRun(opts: {
   projectName: string;
   cases: ParsedCase[];
@@ -215,14 +202,7 @@ async function persistRun(opts: {
   const blocked = cases.filter((c) => c.status === "BLOCKED").length;
   const skipped = cases.filter((c) => c.status === "SKIPPED").length;
   const total = cases.length || (parsed.metrics?.totalTests ?? 0);
-  const status: RunStatus =
-    failed > 0
-      ? RunStatus.FAILED
-      : blocked > 0
-        ? RunStatus.BLOCKED
-        : passed > 0
-          ? RunStatus.PASSED
-          : RunStatus.UNKNOWN;
+  const status = deriveRunStatus({ passed, failed, blocked });
 
   const dateRaw = cases.find((c) => c.date)?.date ?? parsed.detectedDate;
   const execDate = dateRaw ? new Date(dateRaw) : new Date();
@@ -247,7 +227,7 @@ async function persistRun(opts: {
       status,
       observations: parsed.observations,
       sourceFileId: job.sourceFileId,
-      fingerprint: `${project.name}|${defaultModuleName ?? ""}|${job.sourceFile?.contentHash ?? ""}`,
+      fingerprint: fingerprint([project.name, defaultModuleName, job.sourceFile?.contentHash ?? undefined]),
     },
   });
 
@@ -284,16 +264,12 @@ async function persistRun(opts: {
         expected: c.expected,
         expectedIntegration: c.expectedIntegration,
         actual: c.actual,
-        environment: c.environment,
         cycle: c.cycle,
         executor: c.tester,
         reviewedBy: c.reviewedBy,
         observations: c.observations,
-        evidenceUrl: c.evidenceUrl,
         requirementRef: c.requirementRef,
-        release: c.version,
         sprint: c.sprint,
-        severity: c.severity,
       },
     });
     if (c.status === "FAIL") {
@@ -305,7 +281,7 @@ async function persistRun(opts: {
           moduleId: caseModuleId,
           title: c.title,
           description: c.actual || c.description,
-          severity: asSev(c.severity),
+          severity: asSev(mapSeverity(c.severity)),
           status: DefectStatus.OPEN,
           detectedDate: run.executionDate,
         },
@@ -337,7 +313,7 @@ async function persistRun(opts: {
           moduleId,
           title: d.title,
           description: d.description,
-          severity: asSev(d.severity),
+          severity: asSev(mapSeverity(d.severity)),
           status: DefectStatus.OPEN,
           detectedDate: run.executionDate,
         },

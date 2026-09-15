@@ -1,29 +1,15 @@
 import { useEffect, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { Trash2 } from "lucide-react";
-import { api, API_URL, getToken, toQuery } from "../lib/api";
+import { api, toQuery } from "../lib/api";
 import { useAuth } from "../lib/auth";
 import { useFilters } from "../lib/filters";
-import { hasPermission } from "../lib/permissions";
+import { canEditRole, hasPermission } from "../lib/permissions";
 import { formatDateOnly } from "../lib/dates";
+import { useApiList } from "../hooks/useApiList";
 import { GoNoGoCell } from "../components/GoNoGo";
 import { CoverageDot, StatusBadge } from "../components/StatusBadge";
 import { EmptyState } from "../components/EmptyState";
-
-function useApiList<T>(path: string, deps: unknown[] = []) {
-  const [rows, setRows] = useState<T[]>([]);
-  const [error, setError] = useState("");
-  const reload = () => api<T[]>(path).then(setRows).catch((e) => setError((e as Error).message));
-  useEffect(() => {
-    reload();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, deps);
-  return { rows, error, reload };
-}
-
-function canEditRole(role?: string) {
-  return role === "ADMIN" || role === "QA_MANAGER" || role === "QA";
-}
 
 export function RunsPage() {
   const { user } = useAuth();
@@ -157,9 +143,121 @@ export function CasesPage() {
   );
 }
 
+const DEFECT_STATUSES = ["OPEN", "IN_PROGRESS", "FIXED", "READY_FOR_RETEST", "RETEST_FAILED", "CLOSED", "REOPENED"];
+
+function DefectRow({ d, canEdit, onChanged }: { d: any; canEdit: boolean; onChanged: () => void }) {
+  const [busy, setBusy] = useState(false);
+  const [assignedTo, setAssignedTo] = useState(d.assignedTo ?? "");
+  const [resolutionOpen, setResolutionOpen] = useState(false);
+  const [resolution, setResolution] = useState(d.resolution ?? "");
+  const [error, setError] = useState("");
+
+  async function patch(body: Record<string, unknown>) {
+    setBusy(true);
+    setError("");
+    try {
+      await api(`/api/v1/defects/${d.id}`, { method: "PATCH", body: JSON.stringify(body) });
+      onChanged();
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <>
+      <tr className="border-t border-slate-200 align-top dark:border-slate-800">
+        <td className="py-2">
+          {d.title}
+          {d.testRunId && (
+            <Link className="ml-2 text-xs text-cyan-700 dark:text-cyan-400" to={`/runs/${d.testRunId}`}>
+              ver caso
+            </Link>
+          )}
+        </td>
+        <td>{d.project?.name}</td>
+        <td>{d.module?.name ?? "—"}</td>
+        <td>
+          <StatusBadge value={d.severity} />
+        </td>
+        <td>
+          {canEdit ? (
+            <select
+              className="rounded-lg border border-slate-200 bg-white px-2 py-1 text-xs dark:border-slate-700 dark:bg-slate-950"
+              value={d.status}
+              disabled={busy}
+              onChange={(e) => patch({ status: e.target.value })}
+            >
+              {DEFECT_STATUSES.map((s) => (
+                <option key={s} value={s}>
+                  {s}
+                </option>
+              ))}
+            </select>
+          ) : (
+            <StatusBadge value={d.status} />
+          )}
+        </td>
+        <td>
+          {canEdit ? (
+            <input
+              className="w-32 rounded-lg border border-slate-200 bg-white px-2 py-1 text-xs dark:border-slate-700 dark:bg-slate-950"
+              value={assignedTo}
+              disabled={busy}
+              placeholder="Sin asignar"
+              onChange={(e) => setAssignedTo(e.target.value)}
+              onBlur={() => assignedTo !== (d.assignedTo ?? "") && patch({ assignedTo })}
+            />
+          ) : (
+            d.assignedTo ?? "—"
+          )}
+        </td>
+        <td>
+          {canEdit && (
+            <button className="text-xs text-cyan-700 dark:text-cyan-400" onClick={() => setResolutionOpen((v) => !v)}>
+              Resolución
+            </button>
+          )}
+        </td>
+      </tr>
+      {resolutionOpen && (
+        <tr className="border-t border-slate-200 dark:border-slate-800">
+          <td colSpan={7} className="py-2">
+            <div className="flex items-start gap-2">
+              <textarea
+                className="w-full rounded-lg border border-slate-200 bg-white px-2 py-1 text-xs dark:border-slate-700 dark:bg-slate-950"
+                rows={2}
+                value={resolution}
+                onChange={(e) => setResolution(e.target.value)}
+              />
+              <button
+                className="rounded-lg bg-cyan-600 px-3 py-1.5 text-xs text-white disabled:opacity-50"
+                disabled={busy}
+                onClick={() => patch({ resolution }).then(() => setResolutionOpen(false))}
+              >
+                Guardar
+              </button>
+            </div>
+          </td>
+        </tr>
+      )}
+      {error && (
+        <tr>
+          <td colSpan={7} className="pb-2 text-xs text-rose-500">
+            {error}
+          </td>
+        </tr>
+      )}
+    </>
+  );
+}
+
 export function DefectsPage() {
+  const { user } = useAuth();
   const { query } = useFilters();
-  const { rows, error } = useApiList<any>(`/api/v1/defects${toQuery(query)}`, [query]);
+  const { rows, error, reload } = useApiList<any>(`/api/v1/defects${toQuery(query)}`, [query]);
+  const canEdit = canEditRole(user?.role);
   if (error) return <p className="text-rose-500">{error}</p>;
   return (
     <div className="card overflow-x-auto">
@@ -172,21 +270,13 @@ export function DefectsPage() {
             <th>Módulo</th>
             <th>Severidad</th>
             <th>Estado</th>
+            <th>Asignado a</th>
+            <th></th>
           </tr>
         </thead>
         <tbody>
           {rows.map((d) => (
-            <tr key={d.id} className="border-t border-slate-200 dark:border-slate-800">
-              <td className="py-2">{d.title}</td>
-              <td>{d.project?.name}</td>
-              <td>{d.module?.name ?? "—"}</td>
-              <td>
-                <StatusBadge value={d.severity} />
-              </td>
-              <td>
-                <StatusBadge value={d.status} />
-              </td>
-            </tr>
+            <DefectRow key={d.id} d={d} canEdit={canEdit} onChanged={reload} />
           ))}
         </tbody>
       </table>
@@ -327,10 +417,8 @@ export function ReportsPage() {
   const { query } = useFilters();
   const { rows, error } = useApiList<any>(`/api/v1/reports${toQuery(query)}`, [query]);
   async function exportCsv() {
-    const res = await fetch(`${API_URL}/api/v1/reports/export${toQuery(query)}`, {
-      headers: { Authorization: `Bearer ${getToken()}` },
-    });
-    const blob = await res.blob();
+    const csv = await api<string>(`/api/v1/reports/export${toQuery(query)}`);
+    const blob = new Blob([csv], { type: "text/csv" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;

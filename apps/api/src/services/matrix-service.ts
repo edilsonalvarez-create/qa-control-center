@@ -1,8 +1,8 @@
-import { CaseStatus, DefectStatus, Prisma, RunStatus } from "@prisma/client";
+import { CaseStatus, DefectStatus, Prisma, RunStatus, Severity } from "@prisma/client";
 import { z } from "zod";
 import { prisma } from "../lib/prisma.js";
 import { asEnv, asSev, asTestType } from "../parsers/enums.js";
-import { mapSeverity } from "../parsers/normalize.js";
+import { fingerprint, mapSeverity } from "../parsers/normalize.js";
 import { deriveRunStatus, manualRunFingerprint, toCaseStatus } from "./matrix-logic.js";
 import { commitImport, createPreview } from "./import-service.js";
 import type { FilterQuery } from "../lib/filters.js";
@@ -18,13 +18,20 @@ import type { FilterQuery } from "../lib/filters.js";
 const caseInclude = {
   testRun: { include: { project: true, module: true } },
   defects: true,
+  evidence: true,
 } satisfies Prisma.TestCaseInclude;
 
-/** Nullable free-text columns copied verbatim from the matrix. */
+/**
+ * Nullable free-text columns copied verbatim from the matrix. `release`,
+ * `environment`, `severity` and `evidenceUrl` are intentionally
+ * NOT here even though `caseInput` still accepts them: they're transient
+ * inputs used to seed/derive TestRun.version, TestRun.environment,
+ * Defect.severity, the auto-defect title and the Evidence record — their
+ * real home is those other tables, not a duplicate TestCase column.
+ */
 const STRING_FIELDS = [
   "externalId",
   "product",
-  "release",
   "sprint",
   "requirementRef",
   "moduleName",
@@ -38,13 +45,9 @@ const STRING_FIELDS = [
   "steps",
   "expected",
   "expectedIntegration",
-  "environment",
   "executor",
   "cycle",
   "actual",
-  "severity",
-  "defectRef",
-  "evidenceUrl",
   "observations",
   "reviewedBy",
 ] as const;
@@ -76,7 +79,6 @@ const caseInput = z.object({
   actual: z.string().max(4000).optional(),
   status: z.string().trim().max(80).optional(),
   severity: z.string().trim().max(80).optional(),
-  defectRef: z.string().trim().max(120).optional(),
   evidenceUrl: z.string().trim().max(1000).optional(),
   observations: z.string().max(4000).optional(),
   reviewedBy: z.string().trim().max(200).optional(),
@@ -167,6 +169,19 @@ async function ensureManualRun(opts: {
   return { id: run.id, projectId: project.id, moduleId };
 }
 
+/** Seed TestRun.version / environment from the form payload (no longer stored on TestCase). */
+async function applyRunSeeds(runId: string, input: Partial<CaseInput>) {
+  const data: Prisma.TestRunUpdateInput = {};
+  const release = input.release?.trim();
+  if (release) data.version = release;
+  if (input.environment !== undefined && input.environment.trim()) {
+    data.environment = asEnv(input.environment);
+  }
+  if (Object.keys(data).length) {
+    await prisma.testRun.update({ where: { id: runId }, data });
+  }
+}
+
 /** Recompute a run's counters/status from its cases; drop empty manual runs. */
 async function recomputeRun(runId: string) {
   const run = await prisma.testRun.findUnique({ where: { id: runId }, include: { testCases: true } });
@@ -199,34 +214,42 @@ async function recomputeRun(runId: string) {
       status,
       executionDate,
       tester: cases.find((c) => c.executor)?.executor ?? run.tester,
-      version: cases.find((c) => c.release)?.release ?? run.version,
     },
   });
 }
 
-/** Keep an auto-defect in sync with a FAIL case (mirrors the import behaviour). */
-async function syncCaseDefect(tc: {
-  id: string;
-  status: CaseStatus;
-  title: string;
-  actual: string | null;
-  description: string | null;
-  severity: string | null;
-  executionDate: Date | null;
-  defectRef: string | null;
-  testRunId: string;
-  projectId: string;
-  moduleId: string | null;
-}) {
+/**
+ * Keep an auto-defect in sync with a FAIL case (mirrors the import behaviour).
+ * `severityInput` is the raw value from the request payload (severity is not
+ * a persisted TestCase column — Defect.severity is its single source of
+ * truth). On a partial update where severity isn't resent, fall back to the
+ * existing auto-defect's severity instead of resetting it to UNKNOWN.
+ */
+async function syncCaseDefect(
+  tc: {
+    id: string;
+    status: CaseStatus;
+    title: string;
+    actual: string | null;
+    description: string | null;
+    executionDate: Date | null;
+    testRunId: string;
+    projectId: string;
+    moduleId: string | null;
+  },
+  severityInput?: string,
+) {
   const auto = await prisma.defect.findFirst({ where: { testCaseId: tc.id, origin: "MANUAL_AUTO" } });
   if (tc.status === CaseStatus.FAIL) {
+    const severity =
+      severityInput !== undefined ? asSev(mapSeverity(severityInput)) : (auto?.severity ?? Severity.UNKNOWN);
     const data = {
       testRunId: tc.testRunId,
       projectId: tc.projectId,
       moduleId: tc.moduleId,
-      title: tc.defectRef ? `${tc.defectRef} — ${tc.title}` : tc.title,
+      title: tc.title,
       description: tc.actual || tc.description,
-      severity: asSev(mapSeverity(tc.severity ?? undefined)),
+      severity,
       detectedDate: tc.executionDate ?? new Date(),
       origin: "MANUAL_AUTO",
     };
@@ -283,21 +306,20 @@ export async function createManualCase(raw: unknown, userId: string) {
       status: toCaseStatus(input.status),
       type: asTestType(input.type),
       executionDate: parseDate(input.executionDate),
-      fingerprint: `manual|${project.name}|${input.moduleName ?? ""}|${input.title}|${input.executionDate ?? ""}`
-        .toLowerCase()
-        .replace(/\s+/g, " "),
+      fingerprint: fingerprint(["manual", project.name, input.moduleName, input.title, input.executionDate]),
     } as Prisma.TestCaseUncheckedCreateInput,
   });
 
-  await syncCaseDefect({ ...created, projectId: run.projectId, moduleId: run.moduleId });
-  if (created.evidenceUrl) {
+  await applyRunSeeds(run.id, input);
+  await syncCaseDefect({ ...created, projectId: run.projectId, moduleId: run.moduleId }, input.severity);
+  if (input.evidenceUrl) {
     await prisma.evidence.create({
       data: {
         testRunId: run.id,
         testCaseId: created.id,
         type: "OTHER",
         fileName: "Evidencia",
-        fileUrl: created.evidenceUrl,
+        fileUrl: input.evidenceUrl,
         description: "Enlace de evidencia (Matriz QA)",
       },
     });
@@ -332,15 +354,33 @@ export async function updateManualCase(id: string, raw: unknown, userId: string)
     moduleName,
     cycle,
     type: input.type ?? existing.type,
-    environment: input.environment ?? existing.environment,
+    environment: input.environment ?? existing.testRun.environment,
     executor: input.executor ?? existing.executor,
   });
+
+  await applyRunSeeds(run.id, input);
 
   const data = caseData(input) as Prisma.TestCaseUncheckedUpdateInput;
   if (run.id !== oldRunId) data.testRunId = run.id;
 
   const updated = await prisma.testCase.update({ where: { id }, data });
-  await syncCaseDefect({ ...updated, projectId: run.projectId, moduleId: run.moduleId });
+  await syncCaseDefect({ ...updated, projectId: run.projectId, moduleId: run.moduleId }, input.severity);
+  if (input.evidenceUrl) {
+    const ev = await prisma.evidence.findFirst({ where: { testCaseId: id } });
+    if (ev) await prisma.evidence.update({ where: { id: ev.id }, data: { fileUrl: input.evidenceUrl } });
+    else {
+      await prisma.evidence.create({
+        data: {
+          testRunId: run.id,
+          testCaseId: id,
+          type: "OTHER",
+          fileName: "Evidencia",
+          fileUrl: input.evidenceUrl,
+          description: "Enlace de evidencia (Matriz QA)",
+        },
+      });
+    }
+  }
   await recomputeRun(run.id);
   if (run.id !== oldRunId) await recomputeRun(oldRunId);
   await prisma.auditLog.create({

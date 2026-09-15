@@ -1,7 +1,9 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { Pencil, Plus, Trash2, Upload } from "lucide-react";
 import { api } from "../lib/api";
 import { useAuth } from "../lib/auth";
+import { canEditRole } from "../lib/permissions";
+import { useApiList } from "../hooks/useApiList";
 
 const CATEGORY_LABELS: Record<string, string> = {
   CLIENT: "Clientes",
@@ -22,27 +24,14 @@ const CATEGORY_ORDER = Object.keys(CATEGORY_LABELS);
 
 type CatalogItem = { id: string; category: string; value: string; sortOrder: number };
 
-function canEditRole(role?: string) {
-  return role === "ADMIN" || role === "QA_MANAGER" || role === "QA";
-}
-
 export function CatalogPage() {
   const { user } = useAuth();
   const canEdit = canEditRole(user?.role);
-  const [rows, setRows] = useState<CatalogItem[]>([]);
+  const { rows, error: listError, reload } = useApiList<CatalogItem>("/api/v1/catalog");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [drafts, setDrafts] = useState<Record<string, string>>({});
   const [editing, setEditing] = useState<{ id: string; value: string } | null>(null);
-
-  async function reload() {
-    const data = await api<CatalogItem[]>("/api/v1/catalog");
-    setRows(data);
-  }
-
-  useEffect(() => {
-    reload().catch((e) => setError(e.message));
-  }, []);
 
   const grouped = useMemo(() => {
     const map = new Map<string, CatalogItem[]>();
@@ -139,7 +128,7 @@ export function CatalogPage() {
           </label>
         )}
       </div>
-      {error && <p className="text-sm text-rose-500">{error}</p>}
+      {(error || listError) && <p className="text-sm text-rose-500">{error || listError}</p>}
       {busy && <p className="text-sm text-slate-500">Guardando…</p>}
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
         {grouped.map(([category, items]) => (
