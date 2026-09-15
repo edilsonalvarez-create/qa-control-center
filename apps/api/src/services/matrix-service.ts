@@ -26,8 +26,9 @@ const caseInclude = {
  * `environment`, `severity` and `evidenceUrl` are intentionally
  * NOT here even though `caseInput` still accepts them: they're transient
  * inputs used to seed/derive TestRun.version, TestRun.environment,
- * Defect.severity, the auto-defect title and the Evidence record — their
- * real home is those other tables, not a duplicate TestCase column.
+ * Defect.severity and the Evidence record — their real home is those other
+ * tables, not a duplicate TestCase column. `defectRef` IS a real persisted
+ * column: it's the QA-entered defect reference shown on Defects.
  */
 const STRING_FIELDS = [
   "externalId",
@@ -50,6 +51,7 @@ const STRING_FIELDS = [
   "actual",
   "observations",
   "reviewedBy",
+  "defectRef",
 ] as const;
 
 const caseInput = z.object({
@@ -79,6 +81,7 @@ const caseInput = z.object({
   actual: z.string().max(4000).optional(),
   status: z.string().trim().max(80).optional(),
   severity: z.string().trim().max(80).optional(),
+  defectRef: z.string().trim().max(120).optional(),
   evidenceUrl: z.string().trim().max(1000).optional(),
   observations: z.string().max(4000).optional(),
   reviewedBy: z.string().trim().max(200).optional(),
@@ -241,11 +244,18 @@ async function recomputeRun(runId: string) {
 }
 
 /**
- * Keep an auto-defect in sync with a FAIL case (mirrors the import behaviour).
+ * Keep a case's auto-managed defect in sync with its current FAIL state —
+ * for both manually-entered AND imported cases (import already creates one
+ * with origin "IMPORT" when a row is FAIL; editing that case later must find
+ * and update THAT defect, not create a second one). A case has at most one
+ * auto-managed defect, so the lookup is by testCaseId alone, regardless of
+ * which origin created it; `origin` is only set on first create, never
+ * overwritten on update.
+ *
  * `severityInput` is the raw value from the request payload (severity is not
  * a persisted TestCase column — Defect.severity is its single source of
  * truth). On a partial update where severity isn't resent, fall back to the
- * existing auto-defect's severity instead of resetting it to UNKNOWN.
+ * existing defect's severity instead of resetting it to UNKNOWN.
  */
 async function syncCaseDefect(
   tc: {
@@ -255,13 +265,14 @@ async function syncCaseDefect(
     actual: string | null;
     description: string | null;
     executionDate: Date | null;
+    defectRef: string | null;
     testRunId: string;
     projectId: string;
     moduleId: string | null;
   },
   severityInput?: string,
 ) {
-  const auto = await prisma.defect.findFirst({ where: { testCaseId: tc.id, origin: "MANUAL_AUTO" } });
+  const auto = await prisma.defect.findFirst({ where: { testCaseId: tc.id } });
   if (tc.status === CaseStatus.FAIL) {
     const severity =
       severityInput !== undefined ? asSev(mapSeverity(severityInput)) : (auto?.severity ?? Severity.UNKNOWN);
@@ -269,14 +280,13 @@ async function syncCaseDefect(
       testRunId: tc.testRunId,
       projectId: tc.projectId,
       moduleId: tc.moduleId,
-      title: tc.title,
+      title: tc.defectRef ? `${tc.defectRef} — ${tc.title}` : tc.title,
       description: tc.actual || tc.description,
       severity,
       detectedDate: tc.executionDate ?? new Date(),
-      origin: "MANUAL_AUTO",
     };
     if (auto) await prisma.defect.update({ where: { id: auto.id }, data });
-    else await prisma.defect.create({ data: { ...data, testCaseId: tc.id, status: DefectStatus.OPEN } });
+    else await prisma.defect.create({ data: { ...data, testCaseId: tc.id, status: DefectStatus.OPEN, origin: "MANUAL_AUTO" } });
   } else if (auto) {
     await prisma.defect.delete({ where: { id: auto.id } });
   }
