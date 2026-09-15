@@ -222,7 +222,11 @@ export function inferFromFileName(fileName: string, sourcePath?: string) {
   // Clinical-scale spec matrices (PHQ-4, GerdQ, STOP-Bang, ...) never carry a
   // Módulo/Componente column — they all live under Historia Clínica for
   // MEDICINA INTEGRAL, same as the manual entries already registered there.
-  if (/\bphq\b|stop[_ -]?bang|\bgerdq\b|escalas? clinicas?|escalas? clínicas?/i.test(fileName)) {
+  // Normalize first: real filenames use underscores as separators
+  // ("Ecala_Gerdq.xlsx", "Ecala_Phq-4.xlsx"), and \b doesn't break on "_"
+  // since it's a word character — matching raw against fileName missed them.
+  const clinicalScaleKey = normalizeKey(fileName);
+  if (/\bphq\b|stop bang|\bgerdq\b|escalas? clinicas?/.test(clinicalScaleKey)) {
     moduleName = moduleName ?? "Historia Clínica";
   }
 

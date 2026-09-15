@@ -30,3 +30,4 @@ apps/api/prisma/*.db-journal
 scripts/gas/
 scripts/.cron-secret
 .clasprc.json
+.tmp-*
