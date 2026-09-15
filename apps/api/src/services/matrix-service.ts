@@ -5,6 +5,7 @@ import { asEnv, asSev, asTestType } from "../parsers/enums.js";
 import { fingerprint, mapSeverity } from "../parsers/normalize.js";
 import { deriveRunStatus, manualRunFingerprint, toCaseStatus, usesManualRunContainer } from "./matrix-logic.js";
 import { commitImport, createPreview } from "./import-service.js";
+import { informativeCaseWhere } from "../lib/case-visibility.js";
 import type { FilterQuery } from "../lib/filters.js";
 
 /**
@@ -357,7 +358,7 @@ async function syncCaseDefect(
 }
 
 export async function listMatrixCases(f: FilterQuery & { origin?: string }) {
-  const and: Prisma.TestCaseWhereInput[] = [];
+  const and: Prisma.TestCaseWhereInput[] = [informativeCaseWhere()];
   if (f.origin) and.push({ origin: f.origin });
   if (f.projectId) and.push({ testRun: { projectId: f.projectId } });
   if (f.moduleId) {
