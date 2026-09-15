@@ -9,6 +9,11 @@ export const PERMISSION_LABELS: Record<PermissionKey, string> = {
 
 type BasicUser = { permissions?: Record<string, boolean> };
 
+/** ADMIN/QA_MANAGER/QA can create/edit/delete records; VIEWER is read-only. */
+export function canEditRole(role?: string): boolean {
+  return role === "ADMIN" || role === "QA_MANAGER" || role === "QA";
+}
+
 /**
  * Reads the server-computed permission map from /auth/me. Unlike module
  * visibility, ADMIN is NOT special-cased here — the "Permisos por rol" grid

@@ -9,7 +9,13 @@ PostgreSQL via Prisma. Uncertain values are stored as `Unknown` or `Requires rev
 - **Module** — belongs to a project
 - **Requirement** — optional; many start as Unknown
 - **TestRun** — execution of a suite/matrix (counts, env, tester, version, commit, fingerprint)
-- **TestCase** — row inside a run
+- **TestCase** — row inside a run. Detail fields (steps, expected, moduleName, requirementRef, …) live here.
+  Source of truth that is **not** on TestCase:
+  - severity → `Defect.severity`
+  - version/release → `TestRun.version`
+  - environment → `TestRun.environment`
+  - evidence URL → `Evidence.fileUrl`
+  - defect link → `Defect.testCaseId`
 - **Defect** — linked to case/run/project/module; severity + workflow status
 - **Evidence** — reference to original file/URL (do not duplicate binaries by default)
 - **Release** — version/commit/environment

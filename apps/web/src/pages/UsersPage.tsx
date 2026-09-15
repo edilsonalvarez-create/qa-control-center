@@ -1,9 +1,10 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { Pencil, Plus, X } from "lucide-react";
 import { api } from "../lib/api";
 import { useAuth } from "../lib/auth";
 import { MODULE_KEYS, MODULE_LABELS, type ModuleKey } from "../lib/modules";
 import { PERMISSION_KEYS, PERMISSION_LABELS, type PermissionKey } from "../lib/permissions";
+import { useApiList } from "../hooks/useApiList";
 
 const ROLES = ["ADMIN", "QA_MANAGER", "QA", "VIEWER"] as const;
 const ROLE_LABELS: Record<string, string> = {
@@ -16,17 +17,9 @@ const ROLE_LABELS: Record<string, string> = {
 type RolePermissionRow = { role: (typeof ROLES)[number]; permission: PermissionKey; allowed: boolean };
 
 function PermissionsPanel() {
-  const [rows, setRows] = useState<RolePermissionRow[]>([]);
-  const [error, setError] = useState("");
+  const { rows, error, reload } = useApiList<RolePermissionRow>("/api/v1/permissions");
   const [busyCell, setBusyCell] = useState<string | null>(null);
-
-  async function reload() {
-    setRows(await api<RolePermissionRow[]>("/api/v1/permissions"));
-  }
-
-  useEffect(() => {
-    reload().catch((e) => setError((e as Error).message));
-  }, []);
+  const [actionError, setActionError] = useState("");
 
   function cell(role: (typeof ROLES)[number], permission: PermissionKey) {
     return rows.find((r) => r.role === role && r.permission === permission);
@@ -35,12 +28,12 @@ function PermissionsPanel() {
   async function toggle(role: (typeof ROLES)[number], permission: PermissionKey, next: boolean) {
     const key = `${role}|${permission}`;
     setBusyCell(key);
-    setError("");
+    setActionError("");
     try {
       await api("/api/v1/permissions", { method: "PATCH", body: JSON.stringify({ role, permission, allowed: next }) });
       await reload();
     } catch (e) {
-      setError((e as Error).message);
+      setActionError((e as Error).message);
     } finally {
       setBusyCell(null);
     }
@@ -55,7 +48,7 @@ function PermissionsPanel() {
           (por ahora, eliminar registros en Catálogo y Matriz QA) según el rol.
         </p>
       </div>
-      {error && <p className="text-sm text-rose-500">{error}</p>}
+      {(error || actionError) && <p className="text-sm text-rose-500">{error || actionError}</p>}
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
           <thead>
@@ -125,19 +118,11 @@ const emptyForm = (): FormState => ({
 
 export function UsersPage() {
   const { user: me } = useAuth();
-  const [rows, setRows] = useState<ManagedUser[]>([]);
+  const { rows, error: listError, reload } = useApiList<ManagedUser>("/api/v1/users");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [form, setForm] = useState<FormState | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
-
-  async function reload() {
-    setRows(await api<ManagedUser[]>("/api/v1/users"));
-  }
-
-  useEffect(() => {
-    reload().catch((e) => setError((e as Error).message));
-  }, []);
 
   function openNew() {
     setEditingId(null);
@@ -237,7 +222,7 @@ export function UsersPage() {
         </button>
       </div>
 
-      {error && <p className="text-sm text-rose-500">{error}</p>}
+      {(error || listError) && <p className="text-sm text-rose-500">{error || listError}</p>}
       {busy && <p className="text-sm text-slate-500">Procesando…</p>}
 
       <div className="card overflow-x-auto">

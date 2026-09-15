@@ -50,6 +50,19 @@ OAuth 2.0 refresh tokens are stored encrypted (`DriveConnection`). Users never e
 
 See [DEPLOYMENT.md](DEPLOYMENT.md).
 
+## Pending product decisions (not in this codebase)
+
+These were reviewed in the QA Control cleanup audit and **explicitly not built** (no new modules, no extra complexity):
+
+- Automation hub (Playwright / Postman / k6 as first-class modules)
+- Environments as a configurable entity (today: Prisma `Environment` enum + catalog labels)
+- Hierarchical variables
+- Quality Gates
+- Unifying `/cases` (read-only list) and `/matrix` (manual CRUD) into one screen
+- Future of `Requirement` / `requirementRef`: real Requirements CRUD vs. retiring the unused `Requirement` model
+- Root cause of empty/wrong `TestRun.moduleId` on import (`moduleName` free text currently carries that weight via `case-visibility.ts`)
+- Full Spanish/English terminology relabel across every page
+
 ## Deployment
 
 - Frontend → Vercel

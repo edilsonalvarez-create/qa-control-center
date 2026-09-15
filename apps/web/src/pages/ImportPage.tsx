@@ -1,19 +1,15 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { api } from "../lib/api";
+import { useApiList } from "../hooks/useApiList";
 import { StatusBadge } from "../components/StatusBadge";
-import { DriveSyncPanel } from "./SettingsPage";
+import { DriveSyncPanel } from "../components/DriveSyncPanel";
 
 export function ImportPage() {
-  const [jobs, setJobs] = useState<any[]>([]);
+  const { rows: jobs, error: listError, reload } = useApiList<any>("/api/v1/import");
   const [preview, setPreview] = useState<any>(null);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [sourceUrl, setSourceUrl] = useState("");
-
-  const reload = () => api<any[]>("/api/v1/import").then(setJobs).catch((e) => setError(e.message));
-  useEffect(() => {
-    reload();
-  }, []);
 
   async function upload(file: File) {
     setBusy(true);
@@ -131,6 +127,7 @@ export function ImportPage() {
 
       <div className="card">
         <h3 className="mb-3 font-semibold">Trabajos recientes</h3>
+        {listError && <p className="mb-2 text-sm text-rose-500">{listError}</p>}
         <table className="w-full text-sm">
           <thead>
             <tr className="text-left text-slate-500">

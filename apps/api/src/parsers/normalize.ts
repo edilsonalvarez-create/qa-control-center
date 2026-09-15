@@ -1,5 +1,21 @@
 import type { NarrativeMetrics, ParseWarning } from "./types.js";
 
+/**
+ * The 5 known client/project names, referenced by all the heuristics below
+ * (name hints, drive-path hints, module hints, the final allowlist). Each
+ * heuristic still applies its own matching rules tuned to where the hint
+ * comes from (raw filename vs. normalized key vs. path segment) — this
+ * constant only removes the risk of the *list of names itself* drifting
+ * between them.
+ */
+export const KNOWN_CLIENTS = {
+  SUMIMEDICAL: "SUMIMEDICAL",
+  MEDICINA_INTEGRAL: "MEDICINA INTEGRAL",
+  FERROCARRILES: "FERROCARRILES",
+  SANOVA: "SANOVA",
+  FOMAG: "FOMAG",
+} as const;
+
 export function normalizeText(value: string | undefined | null): string {
   return (value ?? "")
     .replace(/\s+/g, " ")
@@ -45,11 +61,11 @@ export function mapStatus(raw: string | undefined): string {
 export function normalizeProjectName(raw: string | undefined): string | undefined {
   if (!raw?.trim()) return undefined;
   const n = normalizeKey(raw);
-  if (/\bsumi\b/.test(n) || n.includes("sumimedical")) return "SUMIMEDICAL";
-  if (n.includes("medicina integral") || n.includes("horus m i")) return "MEDICINA INTEGRAL";
-  if (n.includes("ferro")) return "FERROCARRILES";
-  if (n.includes("sanova")) return "SANOVA";
-  if (n.includes("fomag")) return "FOMAG";
+  if (/\bsumi\b/.test(n) || n.includes("sumimedical")) return KNOWN_CLIENTS.SUMIMEDICAL;
+  if (n.includes("medicina integral") || n.includes("horus m i")) return KNOWN_CLIENTS.MEDICINA_INTEGRAL;
+  if (n.includes("ferro")) return KNOWN_CLIENTS.FERROCARRILES;
+  if (n.includes("sanova")) return KNOWN_CLIENTS.SANOVA;
+  if (n.includes("fomag")) return KNOWN_CLIENTS.FOMAG;
   return raw.replace(/\s+/g, " ").trim();
 }
 
@@ -142,11 +158,11 @@ function pathHint(value: string): string {
 function projectFromNameHints(text: string): string | undefined {
   const n = text.toLowerCase();
   let project: string | undefined;
-  if (n.includes("sumimedical") || n.includes("sumi")) project = "SUMIMEDICAL";
-  if (n.includes("medicina") || n.includes("m.i") || n.includes("horus-m.i")) project = "MEDICINA INTEGRAL";
-  if (n.includes("ferro")) project = "FERROCARRILES";
-  if (n.includes("sanova")) project = "SANOVA";
-  if (n.includes("fomag")) project = "FOMAG";
+  if (n.includes("sumimedical") || n.includes("sumi")) project = KNOWN_CLIENTS.SUMIMEDICAL;
+  if (n.includes("medicina") || n.includes("m.i") || n.includes("horus-m.i")) project = KNOWN_CLIENTS.MEDICINA_INTEGRAL;
+  if (n.includes("ferro")) project = KNOWN_CLIENTS.FERROCARRILES;
+  if (n.includes("sanova")) project = KNOWN_CLIENTS.SANOVA;
+  if (n.includes("fomag")) project = KNOWN_CLIENTS.FOMAG;
   return project;
 }
 
@@ -156,10 +172,10 @@ function projectFromDrivePath(sourcePath?: string): string | undefined {
   const folders = key.split("/").filter(Boolean).slice(0, -1);
   const hay = folders.join("/");
   if (!hay) return undefined;
-  if (/(^|\/)medicina integral(\/|$)/.test(hay) || /(^|\/)test-medicina/.test(hay)) return "MEDICINA INTEGRAL";
-  if (/(^|\/)sumimedical(\/|$)/.test(hay) || /(^|\/)test-sumi/.test(hay)) return "SUMIMEDICAL";
-  if (/(^|\/)ferro/.test(hay) || /(^|\/)test-ferro/.test(hay)) return "FERROCARRILES";
-  if (/(^|\/)sanova(\/|$)/.test(hay) || /(^|\/)test-sanova/.test(hay)) return "SANOVA";
+  if (/(^|\/)medicina integral(\/|$)/.test(hay) || /(^|\/)test-medicina/.test(hay)) return KNOWN_CLIENTS.MEDICINA_INTEGRAL;
+  if (/(^|\/)sumimedical(\/|$)/.test(hay) || /(^|\/)test-sumi/.test(hay)) return KNOWN_CLIENTS.SUMIMEDICAL;
+  if (/(^|\/)ferro/.test(hay) || /(^|\/)test-ferro/.test(hay)) return KNOWN_CLIENTS.FERROCARRILES;
+  if (/(^|\/)sanova(\/|$)/.test(hay) || /(^|\/)test-sanova/.test(hay)) return KNOWN_CLIENTS.SANOVA;
   return undefined;
 }
 
@@ -167,9 +183,9 @@ function projectFromModuleHints(text: string): string | undefined {
   const n = normalizeKey(text);
   if (!n) return undefined;
   if (/\bphq\b/.test(n) || /stop bang/.test(n) || /\bgerdq\b/.test(n) || /escalas clinicas/.test(n)) {
-    return "MEDICINA INTEGRAL";
+    return KNOWN_CLIENTS.MEDICINA_INTEGRAL;
   }
-  if (/escalas respiratorias/.test(n)) return "MEDICINA INTEGRAL";
+  if (/escalas respiratorias/.test(n)) return KNOWN_CLIENTS.MEDICINA_INTEGRAL;
   return undefined;
 }
 
@@ -186,13 +202,14 @@ export function resolveProjectName(opts: {
   const fromPath = projectFromDrivePath(opts.sourcePath);
   if (fromPath) return fromPath;
   const fromClient = normalizeProjectName(opts.client);
-  if (fromClient && /^(SUMIMEDICAL|MEDICINA INTEGRAL|FERROCARRILES|SANOVA|FOMAG)$/.test(fromClient)) {
+  const knownClientNames = new Set<string>(Object.values(KNOWN_CLIENTS));
+  if (fromClient && knownClientNames.has(fromClient)) {
     return fromClient;
   }
   const fromName = projectFromNameHints(opts.fileName ?? "");
   if (fromName) return fromName;
   if (opts.fileName && /(matriz_qa|ejecucion_qa|horus)/i.test(opts.fileName) && !/horus-m\.i/i.test(opts.fileName)) {
-    return "SUMIMEDICAL";
+    return KNOWN_CLIENTS.SUMIMEDICAL;
   }
   return fromClient;
 }

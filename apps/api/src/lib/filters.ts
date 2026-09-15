@@ -1,4 +1,6 @@
 import type { FastifyRequest } from "fastify";
+import { asCase, asEnv, asSev, asTestType } from "../parsers/enums.js";
+import { mapSeverity, mapStatus } from "../parsers/normalize.js";
 
 export type FilterQuery = {
   projectId?: string;
@@ -14,21 +16,41 @@ export type FilterQuery = {
   q?: string;
 };
 
+function present(value?: string): string | undefined {
+  const v = value?.trim();
+  return v ? v : undefined;
+}
+
+/**
+ * Catalog / FilterBar may send Spanish labels ("Alta", "Funcional"). Persist
+ * and query always use Prisma enums — map at the HTTP boundary so a newly
+ * added catalog value still filters the same rows the matrix wrote.
+ */
+export function normalizeFilterQuery(f: FilterQuery): FilterQuery {
+  return {
+    ...f,
+    testType: f.testType ? asTestType(f.testType) : undefined,
+    environment: f.environment ? asEnv(f.environment) : undefined,
+    result: f.result ? asCase(mapStatus(f.result)) : undefined,
+    severity: f.severity ? asSev(mapSeverity(f.severity)) : undefined,
+  };
+}
+
 export function parseFilters(request: FastifyRequest): FilterQuery {
   const q = request.query as Record<string, string | undefined>;
-  return {
-    projectId: q.projectId,
-    moduleId: q.moduleId,
-    tester: q.tester,
-    testType: q.testType,
-    environment: q.environment,
-    result: q.result,
-    severity: q.severity,
-    version: q.version,
-    from: q.from,
-    to: q.to,
-    q: q.q,
-  };
+  return normalizeFilterQuery({
+    projectId: present(q.projectId),
+    moduleId: present(q.moduleId),
+    tester: present(q.tester),
+    testType: present(q.testType),
+    environment: present(q.environment),
+    result: present(q.result),
+    severity: present(q.severity),
+    version: present(q.version),
+    from: present(q.from),
+    to: present(q.to),
+    q: present(q.q),
+  });
 }
 
 export function dateRange(from?: string, to?: string) {

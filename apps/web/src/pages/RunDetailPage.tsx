@@ -3,14 +3,10 @@ import { Link, useNavigate, useParams } from "react-router-dom";
 import { Trash2 } from "lucide-react";
 import { api } from "../lib/api";
 import { useAuth } from "../lib/auth";
-import { hasPermission } from "../lib/permissions";
+import { canEditRole, hasPermission } from "../lib/permissions";
 import { formatDateOnly } from "../lib/dates";
 import { GoNoGoCell } from "../components/GoNoGo";
 import { StatusBadge } from "../components/StatusBadge";
-
-function canEditRole(role?: string) {
-  return role === "ADMIN" || role === "QA_MANAGER" || role === "QA";
-}
 
 export function RunDetailPage() {
   const { id } = useParams();
@@ -163,21 +159,6 @@ export function RunDetailPage() {
                         <div>
                           <dt className="font-semibold">Observaciones</dt>
                           <dd className="whitespace-pre-wrap">{c.observations}</dd>
-                        </div>
-                      )}
-                      {c.evidenceUrl && (
-                        <div>
-                          <dt className="font-semibold">Evidencia</dt>
-                          <dd>
-                            <a
-                              className="text-cyan-700 dark:text-cyan-400"
-                              href={c.evidenceUrl}
-                              target="_blank"
-                              rel="noreferrer"
-                            >
-                              {c.evidenceUrl}
-                            </a>
-                          </dd>
                         </div>
                       )}
                     </dl>

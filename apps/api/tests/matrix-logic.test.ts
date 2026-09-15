@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { CaseStatus, RunStatus } from "@prisma/client";
 import { deriveRunStatus, manualRunFingerprint, toCaseStatus } from "../src/services/matrix-logic.js";
 import { asCase, asEnv, asSev, asTestType } from "../src/parsers/enums.js";
+import { mapSeverity } from "../src/parsers/normalize.js";
 
 describe("toCaseStatus (Matriz QA manual entry)", () => {
   it("maps Spanish matrix labels", () => {
@@ -45,5 +46,10 @@ describe("enum coercion helpers", () => {
     expect(asCase("no-such-thing")).toBe(CaseStatus.REQUIRES_REVIEW);
     expect(asSev("HIGH")).toBe("HIGH");
     expect(asSev(undefined)).toBe("UNKNOWN");
+    // BUG-001: Spanish labels collapse to UNKNOWN unless mapSeverity runs first.
+    expect(asSev("Alta")).toBe("UNKNOWN");
+    expect(asSev(mapSeverity("Alta"))).toBe("HIGH");
+    expect(asSev(mapSeverity("Crítica"))).toBe("CRITICAL");
+    expect(asSev(mapSeverity("Baja"))).toBe("LOW");
   });
 });

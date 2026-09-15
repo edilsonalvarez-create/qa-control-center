@@ -2,9 +2,23 @@ import { useEffect, useState } from "react";
 import { useLocation } from "react-router-dom";
 import { api, toQuery } from "../lib/api";
 import { useFilters } from "../lib/filters";
+import { useCatalogOptions } from "../hooks/useCatalogOptions";
 
 type Project = { id: string; name: string };
 type Module = { id: string; name: string; projectId: string };
+
+/** Used only when the catalog has no values for that category yet. */
+const FALLBACK = {
+  TEST_TYPE: ["FUNCTIONAL", "E2E", "RTM", "BOUNDARY", "REGRESSION", "UNKNOWN"],
+  ENVIRONMENT: ["DEV", "QA", "TEST", "STAGING", "PROD", "UNKNOWN"],
+  EXEC_STATUS: ["PASS", "FAIL", "BLOCKED", "SKIPPED"],
+  SEVERITY: ["CRITICAL", "HIGH", "MEDIUM", "LOW", "UNKNOWN"],
+};
+
+function optionsFor(catalog: string[] | undefined, fallback: string[], current?: string) {
+  const list = catalog?.length ? catalog : fallback;
+  return current && !list.includes(current) ? [current, ...list] : list;
+}
 
 export function FilterBar() {
   const { filters, setFilters } = useFilters();
@@ -13,6 +27,7 @@ export function FilterBar() {
   const [projects, setProjects] = useState<Project[]>([]);
   const [modules, setModules] = useState<Module[]>([]);
   const [modulesReady, setModulesReady] = useState(false);
+  const { byCategory } = useCatalogOptions();
 
   useEffect(() => {
     api<Project[]>(`/api/v1/projects${toQuery({ scope })}`)
@@ -42,6 +57,11 @@ export function FilterBar() {
 
   const set = (k: string, v: string) => setFilters({ ...filters, [k]: v || undefined });
 
+  const types = optionsFor(byCategory.get("TEST_TYPE"), FALLBACK.TEST_TYPE, filters.testType);
+  const envs = optionsFor(byCategory.get("ENVIRONMENT"), FALLBACK.ENVIRONMENT, filters.environment);
+  const results = optionsFor(byCategory.get("EXEC_STATUS"), FALLBACK.EXEC_STATUS, filters.result);
+  const sevs = optionsFor(byCategory.get("SEVERITY"), FALLBACK.SEVERITY, filters.severity);
+
   return (
     <div className="flex flex-wrap gap-2 border-b border-slate-200 bg-white px-6 py-3 dark:border-slate-800 dark:bg-ink-900">
       <select className="filter" value={filters.projectId ?? ""} onChange={(e) => set("projectId", e.target.value)}>
@@ -65,26 +85,34 @@ export function FilterBar() {
       <input className="filter w-32" placeholder="QA" value={filters.tester ?? ""} onChange={(e) => set("tester", e.target.value)} />
       <select className="filter" value={filters.testType ?? ""} onChange={(e) => set("testType", e.target.value)}>
         <option value="">Tipo</option>
-        {["FUNCTIONAL", "E2E", "RTM", "BOUNDARY", "REGRESSION", "UNKNOWN"].map((t) => (
-          <option key={t}>{t}</option>
+        {types.map((t) => (
+          <option key={t} value={t}>
+            {t}
+          </option>
         ))}
       </select>
       <select className="filter" value={filters.environment ?? ""} onChange={(e) => set("environment", e.target.value)}>
         <option value="">Ambiente</option>
-        {["DEV", "QA", "TEST", "STAGING", "PROD", "UNKNOWN"].map((t) => (
-          <option key={t}>{t}</option>
+        {envs.map((t) => (
+          <option key={t} value={t}>
+            {t}
+          </option>
         ))}
       </select>
       <select className="filter" value={filters.result ?? ""} onChange={(e) => set("result", e.target.value)}>
         <option value="">Resultado</option>
-        {["PASS", "FAIL", "BLOCKED", "SKIPPED"].map((t) => (
-          <option key={t}>{t}</option>
+        {results.map((t) => (
+          <option key={t} value={t}>
+            {t}
+          </option>
         ))}
       </select>
       <select className="filter" value={filters.severity ?? ""} onChange={(e) => set("severity", e.target.value)}>
         <option value="">Severidad</option>
-        {["CRITICAL", "HIGH", "MEDIUM", "LOW", "UNKNOWN"].map((t) => (
-          <option key={t}>{t}</option>
+        {sevs.map((t) => (
+          <option key={t} value={t}>
+            {t}
+          </option>
         ))}
       </select>
       <button className="text-xs text-slate-500" onClick={() => setFilters({})}>

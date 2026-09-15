@@ -1,6 +1,6 @@
-import type { FastifyInstance, FastifyReply } from "fastify";
-import { ZodError } from "zod";
+import type { FastifyInstance } from "fastify";
 import { parseFilters } from "../lib/filters.js";
+import { fail } from "../lib/http-errors.js";
 import { requireModule } from "../lib/modules.js";
 import { requirePermission } from "../lib/permissions.js";
 import {
@@ -11,14 +11,6 @@ import {
   listMatrixCases,
   updateManualCase,
 } from "../services/matrix-service.js";
-
-function fail(reply: FastifyReply, error: unknown) {
-  if (error instanceof ZodError) {
-    return reply.code(400).send({ error: "Datos inválidos", details: error.issues });
-  }
-  const e = error as Error & { statusCode?: number };
-  return reply.code(e.statusCode ?? 500).send({ error: e.message || "Error interno" });
-}
 
 export async function matrixRoutes(app: FastifyInstance) {
   app.get("/api/v1/matrix/cases", { preHandler: [app.authenticate, requireModule("matrix")] }, async (request) => {

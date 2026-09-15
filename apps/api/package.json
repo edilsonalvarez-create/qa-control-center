@@ -16,7 +16,8 @@
     "prisma:push": "prisma db push",
     "prisma:seed": "tsx prisma/seed.ts",
     "import:local-matrix": "tsx scripts/import-local-matrix.ts",
-    "import:catalog": "tsx scripts/import-catalog.ts"
+    "import:catalog": "tsx scripts/import-catalog.ts",
+    "backfill:evidence": "tsx scripts/backfill-evidence.ts"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"

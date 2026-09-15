@@ -1,0 +1,222 @@
+import { useEffect, useState } from "react";
+import { api } from "../lib/api";
+import { useAuth } from "../lib/auth";
+import { StatusBadge } from "./StatusBadge";
+
+type DriveStatus = {
+  connected: boolean;
+  mode: string;
+  oauthConfigured: boolean;
+  googleEmail: string | null;
+  folderId: string;
+  folderUrl: string;
+  lastSyncAt: string | null;
+  lastError: string | null;
+  nextSyncAt: string;
+  running: boolean;
+  lastRun: {
+    id: string;
+    status: string;
+    trigger: string;
+    startedAt: string;
+    finishedAt: string | null;
+    filesSeen: number;
+    filesImported: number;
+    filesSkipped: number;
+    filesPreview: number;
+    filesFailed: number;
+    errorMessage: string | null;
+  } | null;
+  recentRuns: Array<{
+    id: string;
+    status: string;
+    trigger: string;
+    startedAt: string;
+    filesImported: number;
+    filesPreview: number;
+    filesSkipped: number;
+    filesFailed: number;
+  }>;
+  schedule: { cron: string; timezone: string; enabled: boolean };
+  pushIngestEnabled: boolean;
+};
+
+export function DriveSyncPanel({ compact = false }: { compact?: boolean }) {
+  const { user } = useAuth();
+  const [status, setStatus] = useState<DriveStatus | null>(null);
+  const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  const canSync = user?.role === "ADMIN" || user?.role === "QA_MANAGER";
+  const canConnect = user?.role === "ADMIN";
+
+  async function reload() {
+    const s = await api<DriveStatus>("/api/v1/integrations/google/status");
+    setStatus(s);
+  }
+
+  useEffect(() => {
+    reload().catch((e) => setError((e as Error).message));
+  }, []);
+
+  useEffect(() => {
+    if (!status?.running) return;
+    const t = setInterval(() => {
+      reload().catch(() => undefined);
+    }, 4000);
+    return () => clearInterval(t);
+  }, [status?.running]);
+
+  async function connect() {
+    setBusy(true);
+    setError("");
+    try {
+      const r = await api<{ url: string }>("/api/v1/integrations/google/start");
+      window.location.href = r.url;
+    } catch (e) {
+      setError((e as Error).message);
+      setBusy(false);
+    }
+  }
+
+  async function syncNow() {
+    setBusy(true);
+    setError("");
+    try {
+      await api("/api/v1/integrations/google/sync", { method: "POST" });
+      await reload();
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  if (!status) {
+    return (
+      <div className="card">
+        <p className="text-sm text-slate-500">{error || "Cargando estado de Drive…"}</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="card space-y-3">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h3 className="font-semibold">{compact ? "Sincronización Drive" : "Google Drive"}</h3>
+          <p className="text-sm text-slate-500">
+            Mientras Google Cloud no permita crear un proyecto OAuth, el camino que sí funciona es un{" "}
+            <strong>Google Apps Script</strong> con tu usuario Sumimedical: cada día a las 6:00 lee{" "}
+            <a className="text-cyan-700" href={status.folderUrl} target="_blank" rel="noreferrer">
+              pruebas qa
+            </a>{" "}
+            y empuja archivos nuevos al API. Duplicados y copias quedan en vista previa.
+          </p>
+        </div>
+        <div className="flex gap-2">
+          {canConnect && (
+            <button
+              className="rounded-xl border border-slate-300 px-3 py-2 text-sm dark:border-slate-600"
+              onClick={connect}
+              disabled={busy}
+            >
+              {status.connected ? "Reconectar Drive" : "Conectar Google Drive"}
+            </button>
+          )}
+          {canSync && (
+            <button
+              className="rounded-xl bg-cyan-600 px-3 py-2 text-sm text-white disabled:opacity-50"
+              onClick={syncNow}
+              disabled={busy || status.running || !status.connected}
+            >
+              {status.running ? "Sincronizando…" : "Sincronizar ahora"}
+            </button>
+          )}
+        </div>
+      </div>
+      <div className="grid gap-2 text-sm sm:grid-cols-2">
+        <p>
+          Estado:{" "}
+          <strong>{status.connected ? `conectado (${status.mode})` : "no conectado"}</strong>
+          {status.googleEmail ? ` · ${status.googleEmail}` : null}
+        </p>
+        <p>
+          Próxima corrida:{" "}
+          <strong>
+            {new Date(status.nextSyncAt).toLocaleString("es-CO", { timeZone: "America/Bogota" })}{" "}
+            (America/Bogota)
+          </strong>
+        </p>
+        <p>
+          Última sync:{" "}
+          {status.lastRun
+            ? `${new Date(status.lastRun.startedAt).toLocaleString("es-CO", { timeZone: "America/Bogota" })} · ${status.lastRun.status}`
+            : "aún no hay corridas"}
+        </p>
+        {status.lastRun && (
+          <p>
+            Archivos: vistos {status.lastRun.filesSeen} · importados {status.lastRun.filesImported} ·
+            preview {status.lastRun.filesPreview} · omitidos {status.lastRun.filesSkipped} · error{" "}
+            {status.lastRun.filesFailed}
+          </p>
+        )}
+      </div>
+      {!status.oauthConfigured && !status.connected && (
+        <div className="rounded-xl border border-amber-400/50 bg-amber-50 p-3 text-sm dark:bg-amber-950/40 space-y-2">
+          <p>
+            OAuth de Google Cloud sigue bloqueado (no hay proyecto). Usa el script en{" "}
+            <code className="text-xs">scripts/drive-sync.gs</code>:
+          </p>
+          <ol className="list-decimal pl-5 space-y-1">
+            <li>
+              Abre{" "}
+              <a className="text-cyan-700" href="https://script.google.com" target="_blank" rel="noreferrer">
+                script.google.com
+              </a>{" "}
+              → proyecto nuevo → pega el script.
+            </li>
+            <li>
+              Propiedades: <code>API_URL</code> = API de Railway, <code>CRON_SECRET</code> igual que en Railway,{" "}
+              <code>FOLDER_ID</code> = la carpeta QA.
+            </li>
+            <li>Ejecuta <code>syncDriveOnce</code> una vez y acepta permisos (Drive + conexión externa).</li>
+            <li>Trigger diario 6:00, zona America/Bogota.</li>
+          </ol>
+          <p>
+            Empuje al API:{" "}
+            <strong>{status.pushIngestEnabled ? "CRON_SECRET configurado" : "falta CRON_SECRET en Railway"}</strong>
+          </p>
+        </div>
+      )}
+      {status.lastError && <p className="text-sm text-rose-500">{status.lastError}</p>}
+      {error && <p className="text-sm text-rose-500">{error}</p>}
+      {!compact && status.recentRuns.length > 0 && (
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="text-left text-slate-500">
+              <th>Inicio</th>
+              <th>Origen</th>
+              <th>Estado</th>
+              <th>Importados</th>
+              <th>Preview</th>
+            </tr>
+          </thead>
+          <tbody>
+            {status.recentRuns.map((r) => (
+              <tr key={r.id} className="border-t border-slate-200 dark:border-slate-800">
+                <td className="py-2">{new Date(r.startedAt).toLocaleString("es-CO", { timeZone: "America/Bogota" })}</td>
+                <td>{r.trigger}</td>
+                <td>
+                  <StatusBadge value={r.status} />
+                </td>
+                <td>{r.filesImported}</td>
+                <td>{r.filesPreview}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+    </div>
+  );
+}

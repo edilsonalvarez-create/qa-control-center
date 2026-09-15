@@ -156,7 +156,6 @@ model Requirement {
   title       String
   description String?
   status      String     @default("Unknown")
-  testCases   TestCase[]
 }
 
 model TestRun {
@@ -200,8 +199,6 @@ model TestCase {
   id                   String       @id @default(cuid())
   testRunId            String
   testRun              TestRun      @relation(fields: [testRunId], references: [id], onDelete: Cascade)
-  requirementId        String?
-  requirement          Requirement? @relation(fields: [requirementId], references: [id])
   externalId           String?
   title                String
   description          String?
@@ -222,18 +219,13 @@ model TestCase {
   expected             String?
   expectedIntegration  String?
   actual               String?
-  environment          String?
   cycle                String?
   executor             String?
   reviewedBy           String?
   observations         String?
-  evidenceUrl          String?
   requirementRef       String?
-  release              String?
   sprint               String?
-  severity             String?
   origin               String       @default("IMPORT")
-  defectRef            String?
   createdAt            DateTime     @default(now())
   updatedAt            DateTime     @default(now()) @updatedAt
   defects              Defect[]
