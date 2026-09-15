@@ -224,6 +224,11 @@ export function MatrixPage() {
             Registro manual de casos de prueba. Todo lo que se guarda aquí alimenta Dashboard, Coverage,
             Defects y Timeline. Los casos que entran por Import Center / Drive se muestran en solo lectura.
           </p>
+          <p className="mt-1 max-w-2xl text-xs text-slate-400">
+            El sistema solo toma la información que registras aquí (Nuevo caso o Importar Excel) — no
+            consulta el archivo enlazado en Evidencia. Si tu Excel tiene el detalle discriminado por caso,
+            súbelo con Importar Excel para que cada fila entre como su propio caso.
+          </p>
         </div>
         {canEdit && (
           <div className="flex items-center gap-2">
@@ -418,6 +423,12 @@ export function MatrixPage() {
                           <option key={o} value={o} />
                         ))}
                       </datalist>
+                    )}
+                    {key === "evidenceUrl" && (
+                      <p className="mt-1 text-xs text-slate-400">
+                        Solo referencia — el sistema no lo abre ni lee su contenido. Si el archivo trae el
+                        detalle de varios casos, súbelo con "Importar Excel" en vez de pegarlo aquí.
+                      </p>
                     )}
                   </label>
                 );
