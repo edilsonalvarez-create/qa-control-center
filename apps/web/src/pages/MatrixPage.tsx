@@ -225,9 +225,10 @@ export function MatrixPage() {
             Defects y Timeline. Los casos que entran por Import Center / Drive se muestran en solo lectura.
           </p>
           <p className="mt-1 max-w-2xl text-xs text-slate-400">
-            El sistema solo toma la información que registras aquí (Nuevo caso o Importar Excel) — no
-            consulta el archivo enlazado en Evidencia. Si tu Excel tiene el detalle discriminado por caso,
-            súbelo con Importar Excel para que cada fila entre como su propio caso.
+            Si el Excel ya está discriminado por caso, súbelo con "Importar Excel" y cada fila entra sola.
+            Si el detalle vive en la hoja que enlazas en Evidencia, pide que se revise ese enlace para
+            cargar cada sub-caso — el registro final siempre queda aquí, alimentando Test Cases, Test Runs
+            y Defects.
           </p>
         </div>
         {canEdit && (
@@ -426,8 +427,9 @@ export function MatrixPage() {
                     )}
                     {key === "evidenceUrl" && (
                       <p className="mt-1 text-xs text-slate-400">
-                        Solo referencia — el sistema no lo abre ni lee su contenido. Si el archivo trae el
-                        detalle de varios casos, súbelo con "Importar Excel" en vez de pegarlo aquí.
+                        Si aquí está el detalle completo de los casos ejecutados (varias filas/resultados),
+                        prefiere subir ese archivo con "Importar Excel". Si solo tienes el enlace, pide que
+                        se revise para cargar cada sub-caso por separado.
                       </p>
                     )}
                   </label>
