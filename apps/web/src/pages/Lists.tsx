@@ -36,10 +36,20 @@ export function RunsPage() {
   }
 
   if (error) return <p className="text-rose-500">{error}</p>;
-  if (!rows.length) return <EmptyState title="Sin test runs" hint="Importa una matriz o reporte desde Import Center." />;
+  if (!rows.length) {
+    return (
+      <EmptyState
+        title="Sin test runs"
+        hint="Los casos de Matriz QA (formulario o Excel) generan corridas aquí. Si hay un filtro de proyecto arriba, pulsa Limpiar para ver todas."
+      />
+    );
+  }
   return (
     <div className="card overflow-x-auto">
       <h2 className="mb-3 text-xl font-bold">Test Runs</h2>
+      <p className="mb-3 text-sm text-slate-500">
+        Incluye las corridas creadas o importadas en Matriz QA, también las que aún no se han ejecutado.
+      </p>
       <table className="w-full text-sm">
         <thead>
           <tr className="text-left text-slate-500">
@@ -51,6 +61,7 @@ export function RunsPage() {
             <th>Total</th>
             <th>P/F/B/S</th>
             <th>Estado</th>
+            <th>Origen</th>
             <th>Go / No Go</th>
             {canDelete && <th></th>}
           </tr>
@@ -73,6 +84,17 @@ export function RunsPage() {
               </td>
               <td>
                 <StatusBadge value={r.status} />
+              </td>
+              <td>
+                <span
+                  className={`rounded-full px-2 py-0.5 text-xs font-semibold ${
+                    r.origin === "MANUAL"
+                      ? "bg-cyan-500/15 text-cyan-700 dark:text-cyan-300"
+                      : "bg-slate-500/15 text-slate-500"
+                  }`}
+                >
+                  {r.origin === "MANUAL" ? "Matriz QA" : "Importado"}
+                </span>
               </td>
               <td>
                 <GoNoGoCell run={r} canEdit={canEdit} onChanged={reload} />

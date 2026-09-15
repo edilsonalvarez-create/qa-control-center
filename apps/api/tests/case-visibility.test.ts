@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { CaseStatus } from "@prisma/client";
 import { hasCaseInformation, isListableCase, isPendingStatus, isPlaceholderTitle } from "../src/lib/case-info.js";
-import { listableCaseWhere, panelCaseWhere } from "../src/lib/case-visibility.js";
+import { informativeCaseWhere, listableCaseWhere, panelCaseWhere } from "../src/lib/case-visibility.js";
 
 describe("case visibility", () => {
   it("treats placeholder rows without an ID as empty", () => {
@@ -24,10 +24,8 @@ describe("case visibility", () => {
     expect(isPendingStatus(CaseStatus.FAIL)).toBe(false);
   });
 
-  it("panel visibility keeps pending Matriz QA cases while still hiding empty imported rows", () => {
-    const panel = panelCaseWhere();
-    const listable = listableCaseWhere();
-    expect(JSON.stringify(panel)).toContain("MANUAL");
-    expect(JSON.stringify(listable)).not.toContain("MANUAL");
+  it("panel visibility matches informative cases so imported pending Matriz rows appear in Test Runs", () => {
+    expect(JSON.stringify(panelCaseWhere())).toEqual(JSON.stringify(informativeCaseWhere()));
+    expect(JSON.stringify(listableCaseWhere())).not.toEqual(JSON.stringify(informativeCaseWhere()));
   });
 });

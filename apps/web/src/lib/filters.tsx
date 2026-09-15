@@ -1,4 +1,5 @@
 import { createContext, useContext, useMemo, useState, type ReactNode } from "react";
+import { useLocation } from "react-router-dom";
 
 export type Filters = {
   projectId?: string;
@@ -21,8 +22,17 @@ type Ctx = {
 
 const C = createContext<Ctx | null>(null);
 
+function filterScope(pathname: string) {
+  if (pathname.startsWith("/runs")) return "runs";
+  return pathname;
+}
+
 export function FiltersProvider({ children }: { children: ReactNode }) {
-  const [filters, setFilters] = useState<Filters>({});
+  const { pathname } = useLocation();
+  const scope = filterScope(pathname);
+  const [byScope, setByScope] = useState<Record<string, Filters>>({});
+  const filters = byScope[scope] ?? {};
+  const setFilters = (next: Filters) => setByScope((prev) => ({ ...prev, [scope]: next }));
   const query = useMemo(() => ({ ...filters }), [filters]);
   return <C.Provider value={{ filters, setFilters, query }}>{children}</C.Provider>;
 }

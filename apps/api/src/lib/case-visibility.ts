@@ -45,17 +45,13 @@ export function listableCaseWhere(): Prisma.TestCaseWhereInput {
 }
 
 /**
- * Test Cases / Matriz / Run detail: executed imported rows plus every
- * informative MANUAL case — including pending (UNKNOWN) ones registered
- * from Matriz QA that listableCaseWhere would hide.
+ * Test Runs / Test Cases / run detail / Matriz filters: every case that has
+ * real information, including imported Matriz QA rows that are still pending
+ * (UNKNOWN / REQUIRES_REVIEW). listableCaseWhere stays executed-only so
+ * Coverage does not treat "not yet run" as coverage.
  */
 export function panelCaseWhere(): Prisma.TestCaseWhereInput {
-  return {
-    AND: [
-      informativeCaseWhere(),
-      { OR: [{ origin: "MANUAL" }, { status: { in: EXECUTED_CASE_STATUSES } }] },
-    ],
-  };
+  return informativeCaseWhere();
 }
 
 export function pendingCaseWhere(): Prisma.TestCaseWhereInput {

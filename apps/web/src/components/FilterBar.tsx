@@ -63,18 +63,14 @@ export function FilterBar() {
   const results = optionsFor(byCategory.get("EXEC_STATUS"), FALLBACK.EXEC_STATUS, filters.result);
   const sevs = optionsFor(byCategory.get("SEVERITY"), FALLBACK.SEVERITY, filters.severity);
 
-  // Filters live in one shared context for the whole app (see lib/filters.tsx)
-  // so they carry over silently across unrelated pages/modules — surface how
-  // many are active and highlight which ones, so a leftover filter from
-  // another page never again looks like "this module isn't updating".
   const activeCount = Object.values(filters).filter(Boolean).length;
 
   return (
     <div className="border-b border-slate-200 bg-white px-6 py-3 dark:border-slate-800 dark:bg-ink-900">
       {activeCount > 0 && (
         <p className="mb-2 text-xs font-medium text-cyan-700 dark:text-cyan-400">
-          {activeCount} {activeCount === 1 ? "filtro activo" : "filtros activos"} — se aplican en todas las páginas
-          hasta que los limpies.
+          {activeCount} {activeCount === 1 ? "filtro activo" : "filtros activos"} en este módulo. Pulsa Limpiar para
+          ver todos los registros.
         </p>
       )}
       <div className="flex flex-wrap gap-2">

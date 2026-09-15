@@ -216,7 +216,7 @@ export async function domainRoutes(app: FastifyInstance) {
   app.get("/api/v1/timeline", { preHandler: [app.authenticate, requireModule("timeline")] }, async (request) => {
     const f = parseFilters(request);
     return prisma.testRun.findMany({
-      where: await runListWhere(f),
+      where: await runListWhere(f, "panel"),
       include: { project: true, module: true, _count: { select: { defects: true } } },
       orderBy: { executionDate: "desc" },
       take: 200,
