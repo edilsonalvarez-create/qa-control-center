@@ -251,13 +251,12 @@ async function recomputeRun(runId: string) {
 /**
  * One-off repair for data written before manual runs were keyed by case
  * identity (see manualRunFingerprint's doc comment): the old default
- * (cycle-less cases sharing project+module fell into one "cycle 1" bucket)
+ * (cycle-less cases, or the implicit cycle "1", sharing project+module)
  * silently merged unrelated cases — e.g. a GerdQ scale validation and a
  * PHQ-4 one — into a single Test Run just because they lived under the same
- * module. Run once at boot (mirrors repairProjectAttribution): moves every
- * manual case that isn't already in the run its current fields resolve to
- * under the new scheme, reusing the same lookup normal writes use, then
- * recomputes every touched run (which deletes any left empty).
+ * module. Also lifts origin=MANUAL cases off an IMPORT run onto their own
+ * Matriz container (Test Cases showed them as Manual while Test Runs still
+ * listed one imported row). Run once at boot and from Settings.
  */
 export async function repairManualRunGrouping(): Promise<{
   scanned: number;
@@ -273,20 +272,20 @@ export async function repairManualRunGrouping(): Promise<{
   let moved = 0;
   for (const c of cases) {
     try {
-      if (c.testRun.origin !== "MANUAL") continue;
       const correctFingerprint = manualRunFingerprint(
         c.testRun.projectId,
         c.moduleName,
         c.cycle,
         c.externalId || c.title,
       );
-      if (c.testRun.fingerprint === correctFingerprint) continue;
+      if (c.testRun.origin === "MANUAL" && c.testRun.fingerprint === correctFingerprint) continue;
       const target = await ensureManualRun({
         projectId: c.testRun.projectId,
         moduleName: c.moduleName,
         cycle: c.cycle,
         caseIdentity: c.externalId || c.title,
         type: c.type,
+        environment: c.testRun.environment,
         executor: c.executor,
       });
       if (target.id === c.testRunId) continue;

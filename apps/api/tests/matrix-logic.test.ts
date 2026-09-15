@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { CaseStatus, RunStatus } from "@prisma/client";
-import { deriveRunStatus, manualRunFingerprint, toCaseStatus, usesManualRunContainer } from "../src/services/matrix-logic.js";
+import { deriveRunStatus, isExplicitCycle, manualRunFingerprint, toCaseStatus, usesManualRunContainer } from "../src/services/matrix-logic.js";
 import { asCase, asEnv, asSev, asTestType } from "../src/parsers/enums.js";
 import { mapSeverity } from "../src/parsers/normalize.js";
 
@@ -38,9 +38,12 @@ describe("usesManualRunContainer", () => {
 });
 
 describe("manualRunFingerprint", () => {
-  it("groups by cycle when the QA sets one explicitly, stable across casing/spacing", () => {
-    expect(manualRunFingerprint("p1", "Incapacidades", "1")).toBe("manual|p1|incapacidades|cycle:1");
-    expect(manualRunFingerprint("p1", " incapacidades ", "1")).toBe("manual|p1|incapacidades|cycle:1");
+  it("groups by cycle only when the QA sets a real batch label, not the legacy default 1", () => {
+    expect(isExplicitCycle("1")).toBe(false);
+    expect(isExplicitCycle("")).toBe(false);
+    expect(isExplicitCycle("Ciclo 2")).toBe(true);
+    expect(manualRunFingerprint("p1", "Incapacidades", "1", "TC-1")).toBe("manual|p1|incapacidades|case:tc-1");
+    expect(manualRunFingerprint("p1", " incapacidades ", "1", "TC-1")).toBe("manual|p1|incapacidades|case:tc-1");
     expect(manualRunFingerprint("p1", null, "Ciclo 2")).toBe("manual|p1||cycle:ciclo 2");
   });
 
