@@ -4,6 +4,7 @@ import {
   isExecutedStatus,
   isPendingStatus,
   listableCaseWhere,
+  panelCaseWhere,
 } from "../lib/case-visibility.js";
 import { prisma } from "../lib/prisma.js";
 import { type FilterQuery } from "../lib/filters.js";
@@ -244,7 +245,7 @@ export async function searchAll(q: string) {
     prisma.testRun.findMany({
       where: {
         AND: [
-          { testCases: { some: listableCaseWhere() } },
+          { testCases: { some: panelCaseWhere() } },
           { OR: [{ tester: contains }, { observations: contains }, { version: contains }, { commit: contains }] },
         ],
       },
@@ -254,7 +255,7 @@ export async function searchAll(q: string) {
     prisma.testCase.findMany({
       where: {
         AND: [
-          listableCaseWhere(),
+          panelCaseWhere(),
           { OR: [{ title: contains }, { description: contains }, { externalId: contains }] },
         ],
       },

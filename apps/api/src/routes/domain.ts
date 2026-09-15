@@ -16,7 +16,10 @@ import {
   caseWhere,
   informativeCaseWhere,
   listableCaseWhere,
+  panelCaseWhere,
 } from "../lib/case-visibility.js";
+import { fail } from "../lib/http-errors.js";
+import { updateManualCase } from "../services/matrix-service.js";
 import { sanitizeQuery } from "../lib/auth.js";
 import { requireModule } from "../lib/modules.js";
 import { requirePermission } from "../lib/permissions.js";
@@ -29,7 +32,14 @@ export async function domainRoutes(app: FastifyInstance) {
 
   app.get("/api/v1/projects", { preHandler: [app.authenticate] }, async (request) => {
     const scope = String((request.query as { scope?: string }).scope ?? "executed");
-    const vis = scope === "informative" ? informativeCaseWhere() : listableCaseWhere();
+    if (scope === "all") {
+      return prisma.project.findMany({
+        include: { _count: { select: { modules: true, testRuns: true } } },
+        orderBy: { name: "asc" },
+      });
+    }
+    const vis =
+      scope === "informative" ? informativeCaseWhere() : scope === "panel" ? panelCaseWhere() : listableCaseWhere();
     const cases = await prisma.testCase.findMany({
       where: vis,
       select: { testRun: { select: { projectId: true } } },
@@ -46,7 +56,14 @@ export async function domainRoutes(app: FastifyInstance) {
   app.get("/api/v1/modules", { preHandler: [app.authenticate] }, async (request) => {
     const f = parseFilters(request);
     const scope = String((request.query as { scope?: string }).scope ?? "executed");
-    const vis = scope === "informative" ? "informative" : "listable";
+    if (scope === "all") {
+      return prisma.module.findMany({
+        where: { projectId: f.projectId || undefined },
+        include: { project: true },
+        orderBy: { name: "asc" },
+      });
+    }
+    const vis = scope === "informative" ? "informative" : scope === "panel" ? "panel" : "listable";
     const cases = await prisma.testCase.findMany({
       where: await caseWhere({ ...f, moduleId: undefined }, vis),
       select: { moduleName: true, testRun: { select: { moduleId: true } } },
@@ -67,7 +84,7 @@ export async function domainRoutes(app: FastifyInstance) {
   app.get("/api/v1/test-runs", { preHandler: [app.authenticate, requireModule("runs")] }, async (request) => {
     const f = parseFilters(request);
     return prisma.testRun.findMany({
-      where: await runListWhere(f),
+      where: await runListWhere(f, "panel"),
       include: { project: true, module: true, sourceFile: true, _count: { select: { testCases: true, defects: true } } },
       orderBy: { executionDate: "desc" },
     });
@@ -82,7 +99,7 @@ export async function domainRoutes(app: FastifyInstance) {
         module: true,
         sourceFile: true,
         testCases: {
-          where: listableCaseWhere(),
+          where: panelCaseWhere(),
           include: { defects: { include: { evidence: true } }, evidence: true },
         },
         defects: { include: { evidence: true, testCase: true } },
@@ -131,11 +148,21 @@ export async function domainRoutes(app: FastifyInstance) {
   app.get("/api/v1/test-cases", { preHandler: [app.authenticate, requireModule("cases")] }, async (request) => {
     const f = parseFilters(request);
     return prisma.testCase.findMany({
-      where: await caseWhere(f, "listable"),
-      include: { testRun: { include: { project: true, module: true } }, defects: true },
-      orderBy: { title: "asc" },
+      where: await caseWhere(f, "panel"),
+      include: { testRun: { include: { project: true, module: true } }, defects: true, evidence: true },
+      orderBy: { createdAt: "desc" },
       take: 500,
     });
+  });
+
+  app.patch("/api/v1/test-cases/:id", { preHandler: [app.authenticate, requireModule("cases"), app.requireQa] }, async (request, reply) => {
+    const { id } = request.params as { id: string };
+    const user = request.user as { sub: string };
+    try {
+      return await updateManualCase(id, request.body, user.sub);
+    } catch (error) {
+      return fail(reply, error);
+    }
   });
 
   app.get("/api/v1/defects", { preHandler: [app.authenticate, requireModule("defects")] }, async (request) => {

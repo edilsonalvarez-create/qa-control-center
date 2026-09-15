@@ -44,6 +44,20 @@ export function listableCaseWhere(): Prisma.TestCaseWhereInput {
   };
 }
 
+/**
+ * Test Cases / Matriz / Run detail: executed imported rows plus every
+ * informative MANUAL case — including pending (UNKNOWN) ones registered
+ * from Matriz QA that listableCaseWhere would hide.
+ */
+export function panelCaseWhere(): Prisma.TestCaseWhereInput {
+  return {
+    AND: [
+      informativeCaseWhere(),
+      { OR: [{ origin: "MANUAL" }, { status: { in: EXECUTED_CASE_STATUSES } }] },
+    ],
+  };
+}
+
 export function pendingCaseWhere(): Prisma.TestCaseWhereInput {
   return {
     AND: [informativeCaseWhere(), { status: CaseStatus.UNKNOWN }],
@@ -69,15 +83,17 @@ async function moduleMatch(f: FilterQuery): Promise<Prisma.TestCaseWhereInput> {
   };
 }
 
-export type CaseVisibility = "listable" | "informative" | "pending";
+export type CaseVisibility = "listable" | "informative" | "pending" | "panel";
+
+function visibilityWhere(visibility: CaseVisibility): Prisma.TestCaseWhereInput {
+  if (visibility === "listable") return listableCaseWhere();
+  if (visibility === "pending") return pendingCaseWhere();
+  if (visibility === "panel") return panelCaseWhere();
+  return informativeCaseWhere();
+}
 
 export async function caseWhere(f: FilterQuery, visibility: CaseVisibility): Promise<Prisma.TestCaseWhereInput> {
-  const vis =
-    visibility === "listable"
-      ? listableCaseWhere()
-      : visibility === "pending"
-        ? pendingCaseWhere()
-        : informativeCaseWhere();
+  const vis = visibilityWhere(visibility);
   const result =
     f.result && EXECUTED_CASE_STATUSES.includes(f.result as CaseStatus)
       ? { status: f.result as CaseStatus }
@@ -87,10 +103,13 @@ export async function caseWhere(f: FilterQuery, visibility: CaseVisibility): Pro
   };
 }
 
-export async function runListWhere(f: FilterQuery): Promise<Prisma.TestRunWhereInput> {
+export async function runListWhere(
+  f: FilterQuery,
+  visibility: CaseVisibility = "listable",
+): Promise<Prisma.TestRunWhereInput> {
   const caseMatch: Prisma.TestCaseWhereInput = {
     AND: [
-      listableCaseWhere(),
+      visibilityWhere(visibility),
       f.result && EXECUTED_CASE_STATUSES.includes(f.result as CaseStatus)
         ? { status: f.result as CaseStatus }
         : {},

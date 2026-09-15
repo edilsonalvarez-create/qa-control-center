@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useRef, useState } from "react";
-import { Pencil, Plus, Trash2, Upload, X } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { Pencil, Plus, Trash2, Upload } from "lucide-react";
 import { api, toQuery } from "../lib/api";
 import { useAuth } from "../lib/auth";
 import { useFilters } from "../lib/filters";
@@ -7,101 +7,7 @@ import { canEditRole } from "../lib/permissions";
 import { formatDateOnly } from "../lib/dates";
 import { StatusBadge } from "../components/StatusBadge";
 import { EmptyState } from "../components/EmptyState";
-
-type Project = { id: string; name: string; client?: string | null };
-type CatalogItem = { id: string; category: string; value: string };
-type ModuleOption = { id: string; name: string };
-
-/** Catalog categories rendered as enforced selects in the manual-entry form (see FIELDS below). */
-const CATALOG_KINDS = new Set([
-  "TEST_TYPE",
-  "LEVEL",
-  "PRIORITY",
-  "AUTOMATABLE",
-  "TOOL",
-  "ENVIRONMENT",
-  "OWNER",
-  "EXEC_STATUS",
-  "SEVERITY",
-]);
-
-type MatrixCase = {
-  id: string;
-  origin: "MANUAL" | "IMPORT";
-  externalId: string | null;
-  title: string;
-  type: string;
-  status: string;
-  priority: string | null;
-  severity: string | null;
-  moduleName: string | null;
-  product: string | null;
-  functionality: string | null;
-  level: string | null;
-  automatable: string | null;
-  tool: string | null;
-  preconditions: string | null;
-  testData: string | null;
-  steps: string | null;
-  expected: string | null;
-  expectedIntegration: string | null;
-  actual: string | null;
-  environment: string | null;
-  cycle: string | null;
-  executor: string | null;
-  reviewedBy: string | null;
-  observations: string | null;
-  evidenceUrl: string | null;
-  requirementRef: string | null;
-  release: string | null;
-  sprint: string | null;
-  executionDate: string | null;
-  defects?: { severity: string; origin: string }[];
-  evidence?: { id: string; fileUrl: string | null }[];
-  testRun?: {
-    id: string;
-    version?: string | null;
-    environment?: string | null;
-    project?: { id: string; name: string };
-    module?: { name: string } | null;
-  };
-};
-
-// [field, label, catalog category | "textarea" | "date" | "url" | ""]
-const FIELDS: Array<[keyof MatrixCase | "projectId", string, string]> = [
-  ["externalId", "ID Caso", ""],
-  ["projectId", "Cliente / Proyecto", "project"],
-  ["product", "Proyecto / Producto", ""],
-  ["release", "Release / Build", ""],
-  ["sprint", "Sprint / Iteración", ""],
-  ["requirementRef", "Requisito / HU / Ticket", ""],
-  ["moduleName", "Módulo / Componente", "MODULE"],
-  ["functionality", "Funcionalidad", ""],
-  ["title", "Título del Caso", ""],
-  ["type", "Tipo de Prueba", "TEST_TYPE"],
-  ["level", "Nivel", "LEVEL"],
-  ["priority", "Prioridad", "PRIORITY"],
-  ["automatable", "Automatizable", "AUTOMATABLE"],
-  ["tool", "Herramienta", "TOOL"],
-  ["preconditions", "Precondiciones", "textarea"],
-  ["testData", "Datos de Prueba", "textarea"],
-  ["steps", "Pasos de Ejecución", "textarea"],
-  ["expected", "Resultado Esperado", "textarea"],
-  ["expectedIntegration", "Resultado Esperado (Sistema Destino / Integración)", "textarea"],
-  ["environment", "Ambiente", "ENVIRONMENT"],
-  ["executionDate", "Fecha Ejecución", "date"],
-  ["executor", "Ejecutor", "OWNER"],
-  ["cycle", "Ciclo", ""],
-  ["actual", "Resultado Obtenido", "textarea"],
-  ["status", "Estado", "EXEC_STATUS"],
-  ["severity", "Severidad (si falla)", "SEVERITY"],
-  ["evidenceUrl", "Evidencia (link)", "url"],
-  ["observations", "Observaciones", "textarea"],
-  ["reviewedBy", "Revisado por (QA Lead)", "OWNER"],
-];
-
-const emptyForm = (): Record<string, string> =>
-  Object.fromEntries(FIELDS.map(([k]) => [k, ""])) as Record<string, string>;
+import { CaseFormDrawer, type MatrixCase } from "../components/CaseFormDrawer";
 
 export function MatrixPage() {
   const { user } = useAuth();
@@ -109,105 +15,21 @@ export function MatrixPage() {
   const { query } = useFilters();
 
   const [rows, setRows] = useState<MatrixCase[]>([]);
-  const [catalog, setCatalog] = useState<CatalogItem[]>([]);
-  const [projects, setProjects] = useState<Project[]>([]);
-  const [modules, setModules] = useState<ModuleOption[]>([]);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
-  const [form, setForm] = useState<Record<string, string> | null>(null);
-  const [editingId, setEditingId] = useState<string | null>(null);
+  const [drawer, setDrawer] = useState<MatrixCase | "new" | null>(null);
   const [dups, setDups] = useState<{ jobId: string; list: { id: string; reason: string }[] } | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
   async function reload() {
-    const [cases, cat, projs] = await Promise.all([
-      api<MatrixCase[]>(`/api/v1/matrix/cases${toQuery(query)}`),
-      api<CatalogItem[]>("/api/v1/catalog"),
-      api<Project[]>("/api/v1/matrix/projects"),
-    ]);
+    const cases = await api<MatrixCase[]>(`/api/v1/matrix/cases${toQuery(query)}`);
     setRows(cases);
-    setCatalog(cat);
-    setProjects(projs);
   }
 
   useEffect(() => {
     reload().catch((e) => setError((e as Error).message));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [query]);
-
-  const optionsFor = useMemo(() => {
-    const map = new Map<string, string[]>();
-    for (const item of catalog) map.set(item.category, [...(map.get(item.category) ?? []), item.value]);
-    return map;
-  }, [catalog]);
-
-  // Module choices for the form are real Module rows scoped to the selected
-  // project (same pattern FilterBar uses) — not the flat, unscoped MODULE
-  // catalog category, since a module always belongs to one project.
-  const formProjectId = form?.projectId;
-  useEffect(() => {
-    if (!formProjectId) {
-      setModules([]);
-      return;
-    }
-    api<ModuleOption[]>(`/api/v1/modules${toQuery({ projectId: formProjectId })}`)
-      .then(setModules)
-      .catch(() => setModules([]));
-  }, [formProjectId]);
-
-  /** Options for a select field, always including the current value even if it fell out of the catalog/module list. */
-  function selectOptions(list: string[], current: string) {
-    return current && !list.includes(current) ? [current, ...list] : list;
-  }
-
-  function openNew() {
-    setEditingId(null);
-    setForm(emptyForm());
-  }
-
-  function openEdit(c: MatrixCase) {
-    const f = emptyForm();
-    // release/environment are no longer stored on the case itself (they seed
-    // the run's version/environment) — fall back to the run's current value
-    // so editing doesn't appear to blank them out. Same for severity: its
-    // real home is the auto-created Defect, so prefill from there.
-    const autoSeverity = c.defects?.find((d) => d.origin === "MANUAL_AUTO")?.severity;
-    for (const [k] of FIELDS) {
-      if (k === "projectId") f[k] = c.testRun?.project?.id ?? "";
-      else if (k === "executionDate") f[k] = c.executionDate ? c.executionDate.slice(0, 10) : "";
-      else if (k === "release") f[k] = c.release ?? c.testRun?.version ?? "";
-      else if (k === "environment") f[k] = c.environment ?? c.testRun?.environment ?? "";
-      else if (k === "severity") f[k] = c.severity ?? autoSeverity ?? "";
-      else if (k === "evidenceUrl") f[k] = c.evidenceUrl ?? c.evidence?.[0]?.fileUrl ?? "";
-      else f[k] = ((c as Record<string, unknown>)[k] as string | null) ?? "";
-    }
-    setEditingId(c.id);
-    setForm(f);
-  }
-
-  async function submit() {
-    if (!form) return;
-    if (!form.projectId) return setError("Selecciona un proyecto.");
-    if (!form.title.trim()) return setError("El título es obligatorio.");
-    setBusy(true);
-    setError("");
-    try {
-      const payload: Record<string, string> = {};
-      for (const [k, v] of Object.entries(form)) if (v !== "") payload[k] = v;
-      if (editingId) {
-        await api(`/api/v1/matrix/cases/${editingId}`, { method: "PATCH", body: JSON.stringify(payload) });
-      } else {
-        await api("/api/v1/matrix/cases", { method: "POST", body: JSON.stringify(payload) });
-      }
-      setForm(null);
-      setEditingId(null);
-      await reload();
-    } catch (e) {
-      setError((e as Error).message);
-    } finally {
-      setBusy(false);
-    }
-  }
 
   async function remove(c: MatrixCase) {
     if (!window.confirm(`¿Eliminar el caso “${c.title}”? Se recalcularán los paneles.`)) return;
@@ -270,12 +92,6 @@ export function MatrixPage() {
             Registro manual de casos de prueba. Todo lo que se guarda aquí alimenta Dashboard, Coverage,
             Defects y Timeline. Los casos que entran por Import Center / Drive se muestran en solo lectura.
           </p>
-          <p className="mt-1 max-w-2xl text-xs text-slate-400">
-            Si el Excel ya está discriminado por caso, súbelo con "Importar Excel" y cada fila entra sola.
-            Si el detalle vive en la hoja que enlazas en Evidencia, pide que se revise ese enlace para
-            cargar cada sub-caso — el registro final siempre queda aquí, alimentando Test Cases, Test Runs
-            y Defects.
-          </p>
         </div>
         {canEdit && (
           <div className="flex items-center gap-2">
@@ -292,7 +108,7 @@ export function MatrixPage() {
             </label>
             <button
               className="inline-flex items-center gap-2 rounded-xl bg-cyan-600 px-3 py-2 text-sm text-white"
-              onClick={openNew}
+              onClick={() => setDrawer("new")}
             >
               <Plus size={16} /> Nuevo caso
             </button>
@@ -309,11 +125,7 @@ export function MatrixPage() {
           {dups.list.map((d) => (
             <p key={d.id}>{d.reason}</p>
           ))}
-          <button
-            className="mt-2 rounded-lg border border-amber-500 px-3 py-1.5"
-            onClick={confirmDuplicates}
-            disabled={busy}
-          >
+          <button className="mt-2 rounded-lg border border-amber-500 px-3 py-1.5" onClick={confirmDuplicates} disabled={busy}>
             Confirmar pese a duplicados
           </button>
         </div>
@@ -355,9 +167,7 @@ export function MatrixPage() {
                     <StatusBadge value={c.status} />
                   </td>
                   <td className="pr-3">{c.executor ?? "—"}</td>
-                  <td className="pr-3">
-                    {formatDateOnly(c.executionDate)}
-                  </td>
+                  <td className="pr-3">{formatDateOnly(c.executionDate)}</td>
                   <td className="pr-3">
                     <span
                       className={`rounded-full px-2 py-0.5 text-xs font-semibold ${
@@ -372,18 +182,10 @@ export function MatrixPage() {
                   <td className="pr-1">
                     {canEdit && c.origin === "MANUAL" && (
                       <div className="flex gap-2">
-                        <button
-                          className="text-slate-400 hover:text-cyan-600"
-                          aria-label="Editar"
-                          onClick={() => openEdit(c)}
-                        >
+                        <button className="text-slate-400 hover:text-cyan-600" aria-label="Editar" onClick={() => setDrawer(c)}>
                           <Pencil size={14} />
                         </button>
-                        <button
-                          className="text-slate-400 hover:text-rose-500"
-                          aria-label="Eliminar"
-                          onClick={() => remove(c)}
-                        >
+                        <button className="text-slate-400 hover:text-rose-500" aria-label="Eliminar" onClick={() => remove(c)}>
                           <Trash2 size={14} />
                         </button>
                       </div>
@@ -396,160 +198,7 @@ export function MatrixPage() {
         </div>
       )}
 
-      {form && (
-        <div className="fixed inset-0 z-30 flex justify-end bg-black/40">
-          <div className="h-full w-full max-w-2xl overflow-y-auto bg-white p-6 shadow-xl dark:bg-slate-900">
-            <div className="mb-4 flex items-center justify-between">
-              <h3 className="text-lg font-bold">{editingId ? "Editar caso" : "Nuevo caso"}</h3>
-              <button aria-label="Cerrar" onClick={() => setForm(null)}>
-                <X size={18} />
-              </button>
-            </div>
-            <form
-              className="grid gap-3"
-              onSubmit={(e) => {
-                e.preventDefault();
-                submit();
-              }}
-            >
-              {FIELDS.map(([key, label, kind]) => {
-                const k = key as string;
-                const value = form[k] ?? "";
-                const set = (v: string) => setForm((f) => ({ ...(f as Record<string, string>), [k]: v }));
-                if (key === "projectId") {
-                  return (
-                    <label key={k} className="text-sm">
-                      <span className="text-slate-500">{label} *</span>
-                      <select
-                        className="mt-1 w-full rounded-lg border border-slate-200 bg-white px-2 py-1.5 dark:border-slate-700 dark:bg-slate-950"
-                        value={value}
-                        onChange={(e) => set(e.target.value)}
-                        required
-                      >
-                        <option value="">— Selecciona —</option>
-                        {projects.map((p) => (
-                          <option key={p.id} value={p.id}>
-                            {p.name}
-                          </option>
-                        ))}
-                      </select>
-                    </label>
-                  );
-                }
-                if (kind === "textarea") {
-                  return (
-                    <label key={k} className="text-sm">
-                      <span className="text-slate-500">{label}</span>
-                      <textarea
-                        className="mt-1 w-full rounded-lg border border-slate-200 bg-white px-2 py-1.5 dark:border-slate-700 dark:bg-slate-950"
-                        rows={3}
-                        value={value}
-                        onChange={(e) => set(e.target.value)}
-                      />
-                    </label>
-                  );
-                }
-                if (key === "moduleName") {
-                  const options = selectOptions(modules.map((m) => m.name), value);
-                  return (
-                    <label key={k} className="text-sm">
-                      <span className="text-slate-500">{label}</span>
-                      <select
-                        className="mt-1 w-full rounded-lg border border-slate-200 bg-white px-2 py-1.5 dark:border-slate-700 dark:bg-slate-950"
-                        value={value}
-                        disabled={!form.projectId}
-                        onChange={(e) => set(e.target.value)}
-                      >
-                        <option value="">— Selecciona —</option>
-                        {options.map((o) => (
-                          <option key={o} value={o}>
-                            {o}
-                          </option>
-                        ))}
-                      </select>
-                      {!form.projectId && (
-                        <p className="mt-1 text-xs text-slate-400">Selecciona primero el Cliente / Proyecto.</p>
-                      )}
-                    </label>
-                  );
-                }
-                if (CATALOG_KINDS.has(kind)) {
-                  const options = selectOptions(optionsFor.get(kind) ?? [], value);
-                  return (
-                    <label key={k} className="text-sm">
-                      <span className="text-slate-500">{label}</span>
-                      <select
-                        className="mt-1 w-full rounded-lg border border-slate-200 bg-white px-2 py-1.5 dark:border-slate-700 dark:bg-slate-950"
-                        value={value}
-                        onChange={(e) => set(e.target.value)}
-                      >
-                        <option value="">— Selecciona —</option>
-                        {options.map((o) => (
-                          <option key={o} value={o}>
-                            {o}
-                          </option>
-                        ))}
-                      </select>
-                      {!options.length && (
-                        <p className="mt-1 text-xs text-slate-400">
-                          Sin valores en Catálogo todavía — agrégalos en Catálogo.
-                        </p>
-                      )}
-                    </label>
-                  );
-                }
-                const listId = optionsFor.get(kind) ? `dl-${k}` : undefined;
-                return (
-                  <label key={k} className="text-sm">
-                    <span className="text-slate-500">
-                      {label}
-                      {key === "title" ? " *" : ""}
-                    </span>
-                    <input
-                      className="mt-1 w-full rounded-lg border border-slate-200 bg-white px-2 py-1.5 dark:border-slate-700 dark:bg-slate-950"
-                      type={kind === "date" ? "date" : kind === "url" ? "url" : "text"}
-                      list={listId}
-                      value={value}
-                      required={key === "title"}
-                      onChange={(e) => set(e.target.value)}
-                    />
-                    {listId && (
-                      <datalist id={listId}>
-                        {(optionsFor.get(kind) ?? []).map((o) => (
-                          <option key={o} value={o} />
-                        ))}
-                      </datalist>
-                    )}
-                    {key === "evidenceUrl" && (
-                      <p className="mt-1 text-xs text-slate-400">
-                        Si aquí está el detalle completo de los casos ejecutados (varias filas/resultados),
-                        prefiere subir ese archivo con "Importar Excel". Si solo tienes el enlace, pide que
-                        se revise para cargar cada sub-caso por separado.
-                      </p>
-                    )}
-                  </label>
-                );
-              })}
-              <div className="sticky bottom-0 flex gap-2 bg-white pt-3 dark:bg-slate-900">
-                <button
-                  type="submit"
-                  className="rounded-xl bg-cyan-600 px-4 py-2 text-sm text-white disabled:opacity-50"
-                  disabled={busy}
-                >
-                  {editingId ? "Guardar cambios" : "Crear caso"}
-                </button>
-                <button
-                  type="button"
-                  className="rounded-xl border border-slate-200 px-4 py-2 text-sm dark:border-slate-700"
-                  onClick={() => setForm(null)}
-                >
-                  Cancelar
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
+      <CaseFormDrawer target={drawer} saveTo="matrix" onClose={() => setDrawer(null)} onSaved={reload} />
     </div>
   );
 }
