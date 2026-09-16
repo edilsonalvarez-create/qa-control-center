@@ -265,10 +265,13 @@ export function CaseFormDrawer({
               );
             }
             if (key === "moduleName") {
-              const options = selectOptions(
-                modules.map((m) => m.name),
-                value,
-              );
+              // Union of the project's real modules (from existing runs/cases) and
+              // Catálogo → Módulos (apps/web/src/pages/CatalogPage.tsx) — editing
+              // the catalog list must show up here immediately, not just names
+              // that already have data.
+              const catalogModules = optionsFor.get("MODULE") ?? [];
+              const projectModules = modules.map((m) => m.name);
+              const options = selectOptions([...new Set([...catalogModules, ...projectModules])], value);
               return (
                 <label key={k} className="text-sm">
                   <span className="text-slate-500">{label}</span>
