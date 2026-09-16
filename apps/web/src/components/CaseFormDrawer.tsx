@@ -20,6 +20,7 @@ export type MatrixCase = {
   level: string | null;
   automatable: string | null;
   tool: string | null;
+  acceptanceCriteria: string | null;
   preconditions: string | null;
   testData: string | null;
   steps: string | null;
@@ -76,6 +77,7 @@ const FIELDS: Array<[keyof MatrixCase | "projectId", string, string]> = [
   ["priority", "Prioridad", "PRIORITY"],
   ["automatable", "Automatizable", "AUTOMATABLE"],
   ["tool", "Herramienta", "TOOL"],
+  ["acceptanceCriteria", "Criterios de Aceptación", "textarea"],
   ["preconditions", "Precondiciones", "textarea"],
   ["testData", "Datos de Prueba", "textarea"],
   ["steps", "Pasos de Ejecución", "textarea"],
@@ -240,15 +242,27 @@ export function CaseFormDrawer({
               );
             }
             if (kind === "textarea") {
+              const isAcceptance = key === "acceptanceCriteria";
               return (
                 <label key={k} className="text-sm">
                   <span className="text-slate-500">{label}</span>
                   <textarea
                     className="mt-1 w-full rounded-lg border border-slate-200 bg-white px-2 py-1.5 dark:border-slate-700 dark:bg-slate-950"
-                    rows={3}
+                    rows={isAcceptance ? 4 : 3}
                     value={value}
+                    placeholder={
+                      isAcceptance
+                        ? "Con [dato de entrada] en formato [X], el sistema debe [comportamiento], validado contra [fuente: BD / API / documento / regla de negocio]."
+                        : undefined
+                    }
                     onChange={(e) => set(e.target.value)}
                   />
+                  {isAcceptance && (
+                    <p className="mt-1 text-xs text-slate-400">
+                      Di con qué datos de entrada, en qué formato y contra qué fuente se valida — si falta
+                      alguno, quien ejecuta el caso tiene que adivinar qué significa "correctamente".
+                    </p>
+                  )}
                 </label>
               );
             }

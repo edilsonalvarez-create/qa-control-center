@@ -22,6 +22,7 @@ export type ColumnRole =
   | "level"
   | "automatable"
   | "tool"
+  | "acceptanceCriteria"
   | "preconditions"
   | "testData"
   | "cycle"
@@ -62,6 +63,7 @@ export type ParsedCase = {
   level?: string;
   automatable?: string;
   tool?: string;
+  acceptanceCriteria?: string;
   preconditions?: string;
   testData?: string;
   steps?: string;

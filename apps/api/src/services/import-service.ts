@@ -258,6 +258,7 @@ async function persistRun(opts: {
         level: c.level,
         automatable: c.automatable,
         tool: c.tool,
+        acceptanceCriteria: c.acceptanceCriteria,
         preconditions: c.preconditions,
         testData: c.testData,
         steps: c.steps,

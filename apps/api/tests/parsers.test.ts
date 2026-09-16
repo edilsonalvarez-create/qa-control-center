@@ -34,6 +34,8 @@ describe("header detection", () => {
     expect(mapHeader("Nivel").role).toBe("level");
     expect(mapHeader("Automatizable").role).toBe("automatable");
     expect(mapHeader("Precondiciones").role).toBe("preconditions");
+    expect(mapHeader("Criterios de Aceptación").role).toBe("acceptanceCriteria");
+    expect(mapHeader("Acceptance Criteria").role).toBe("acceptanceCriteria");
     expect(mapHeader("Datos de Prueba").role).toBe("testData");
     expect(mapHeader("Pasos").role).toBe("steps");
     expect(mapHeader("Resultado Esperado (Sistema Destino)").role).toBe("expectedIntegration");

@@ -78,6 +78,13 @@ const SYNONYMS: Record<ColumnRole, string[]> = {
   level: ["nivel", "level"],
   automatable: ["automatizable", "automatable"],
   tool: ["herramienta", "tool"],
+  acceptanceCriteria: [
+    "criterios de aceptacion",
+    "criterios de aceptación",
+    "criterio de aceptacion",
+    "criterio de aceptación",
+    "acceptance criteria",
+  ],
   preconditions: ["precondicion", "precondición", "precondiciones"],
   testData: [
     "datos de prueba",

@@ -137,6 +137,7 @@ export function parseCaseRows(rows: string[][], fileName: string, sourcePath?: s
       level: get("level") || undefined,
       automatable: get("automatable") || undefined,
       tool: get("tool") || undefined,
+      acceptanceCriteria: get("acceptanceCriteria") || undefined,
       preconditions: get("preconditions") || undefined,
       testData: get("testData") || undefined,
       steps,
