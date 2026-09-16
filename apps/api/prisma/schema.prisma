@@ -213,6 +213,10 @@ model TestCase {
   level                String?
   automatable          String?
   tool                 String?
+  /// What input data, in what format, validated against what source — the
+  /// contract that defines what "correctly" means for this case, so whoever
+  /// executes it doesn't have to guess.
+  acceptanceCriteria   String?
   preconditions        String?
   testData             String?
   steps                String?

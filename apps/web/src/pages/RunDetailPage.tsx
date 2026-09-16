@@ -119,6 +119,12 @@ export function RunDetailPage() {
                       {c.title}
                     </p>
                     <dl className="mt-2 space-y-1 text-xs text-slate-600 dark:text-slate-300">
+                      {c.acceptanceCriteria && (
+                        <div>
+                          <dt className="font-semibold">Criterios de Aceptación</dt>
+                          <dd className="whitespace-pre-wrap">{c.acceptanceCriteria}</dd>
+                        </div>
+                      )}
                       {c.preconditions && (
                         <div>
                           <dt className="font-semibold">Precondiciones</dt>
