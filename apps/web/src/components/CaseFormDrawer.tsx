@@ -1,10 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
 import { X } from "lucide-react";
-import { api, toQuery } from "../lib/api";
+import { api } from "../lib/api";
 
 type Project = { id: string; name: string };
 type CatalogItem = { id: string; category: string; value: string };
-type ModuleOption = { id: string; name: string };
 
 export type MatrixCase = {
   id: string;
@@ -50,6 +49,7 @@ export type MatrixCase = {
 };
 
 const CATALOG_KINDS = new Set([
+  "MODULE",
   "TEST_TYPE",
   "LEVEL",
   "PRIORITY",
@@ -135,7 +135,6 @@ export function CaseFormDrawer({
   const [form, setForm] = useState<Record<string, string> | null>(null);
   const [catalog, setCatalog] = useState<CatalogItem[]>([]);
   const [projects, setProjects] = useState<Project[]>([]);
-  const [modules, setModules] = useState<ModuleOption[]>([]);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
 
@@ -165,17 +164,6 @@ export function CaseFormDrawer({
     for (const item of catalog) map.set(item.category, [...(map.get(item.category) ?? []), item.value]);
     return map;
   }, [catalog]);
-
-  const formProjectId = form?.projectId;
-  useEffect(() => {
-    if (!formProjectId) {
-      setModules([]);
-      return;
-    }
-    api<ModuleOption[]>(`/api/v1/modules${toQuery({ projectId: formProjectId, scope: "all" })}`)
-      .then(setModules)
-      .catch(() => setModules([]));
-  }, [formProjectId]);
 
   if (!target || !form) return null;
 
@@ -261,36 +249,6 @@ export function CaseFormDrawer({
                     value={value}
                     onChange={(e) => set(e.target.value)}
                   />
-                </label>
-              );
-            }
-            if (key === "moduleName") {
-              // Union of the project's real modules (from existing runs/cases) and
-              // Catálogo → Módulos (apps/web/src/pages/CatalogPage.tsx) — editing
-              // the catalog list must show up here immediately, not just names
-              // that already have data.
-              const catalogModules = optionsFor.get("MODULE") ?? [];
-              const projectModules = modules.map((m) => m.name);
-              const options = selectOptions([...new Set([...catalogModules, ...projectModules])], value);
-              return (
-                <label key={k} className="text-sm">
-                  <span className="text-slate-500">{label}</span>
-                  <select
-                    className="mt-1 w-full rounded-lg border border-slate-200 bg-white px-2 py-1.5 dark:border-slate-700 dark:bg-slate-950"
-                    value={value}
-                    disabled={!form.projectId}
-                    onChange={(e) => set(e.target.value)}
-                  >
-                    <option value="">— Selecciona —</option>
-                    {options.map((o) => (
-                      <option key={o} value={o}>
-                        {o}
-                      </option>
-                    ))}
-                  </select>
-                  {!form.projectId && (
-                    <p className="mt-1 text-xs text-slate-400">Selecciona primero el Cliente / Proyecto.</p>
-                  )}
                 </label>
               );
             }
