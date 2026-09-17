@@ -72,11 +72,6 @@ export async function getDriveSyncStatus(config: AppConfig) {
     running: isDriveSyncRunning() || last?.status === "RUNNING",
     last,
     recent,
-    schedule: {
-      cron: config.DRIVE_SYNC_CRON,
-      timezone: config.DRIVE_SYNC_TZ,
-      enabled: config.DRIVE_SYNC_ENABLED !== "false" && config.DRIVE_SYNC_ENABLED !== "0",
-    },
     pushIngestEnabled: true,
   };
 }

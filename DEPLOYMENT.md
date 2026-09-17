@@ -85,7 +85,7 @@ npm run build --workspace=@qacc/api
 
 Production `CORS_ORIGINS` must be the exact Vercel origin (no trailing slash). JWT is sent as `Authorization: Bearer`.
 
-## Google Drive (daily sync)
+## Google Drive (manual sync)
 
 The **Railway API** (not Vercel) lists and downloads Drive files. Schedule: `0 6 * * *` in `America/Bogota`.
 
@@ -108,11 +108,11 @@ CRON_SECRET=<random>
 
 5. Open the live app → Settings → **Conectar Google Drive** with an account that can read the folder.
 
-The daily job runs inside the Railway API (`node-cron` at 06:00 America/Bogota). Never commit client secrets. Never paste a Google password into the app.
+There is no scheduled job: the API only syncs when someone presses **Sincronizar ahora**. Never commit client secrets. Never paste a Google password into the app.
 
 Unattended alternatives (Railway only): `GOOGLE_REFRESH_TOKEN` or `GOOGLE_SERVICE_ACCOUNT_JSON` (share the folder with the service account email).
 
-If Workspace blocks creating Google Cloud projects, use **Google Apps Script** instead (`scripts/drive-sync.gs`): it runs as your Google user, lists the QA folder, and POSTs new files to `/api/v1/integrations/google/ingest` with `CRON_SECRET`. Set the script timezone to America/Bogota and a daily trigger at 6:00.
+If Workspace blocks creating Google Cloud projects, use **Google Apps Script** instead (`scripts/drive-sync.gs`): it runs as your Google user, lists the QA folder, and POSTs new files to `/api/v1/integrations/google/ingest` with `CRON_SECRET`. **Do not add a time-driven trigger** — that reintroduces automatic sync from outside this repo. Run the script by hand when you want a bulk pull. If a daily trigger already exists, delete it in Apps Script > Triggers; removing code here does not stop it.
 
 ## Health
 

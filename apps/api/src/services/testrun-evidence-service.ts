@@ -1,44 +1,35 @@
 import { prisma } from "../lib/prisma.js";
-import { parseGoogleSheetsCsv, ParsedEvidence } from "./evidence-parser-service.js";
+import { parseGoogleSheet } from "./evidence-parser-service.js";
 
-/**
- * Update TestRun with evidence URL and parse P/F/B/S from the sheet.
- */
-export async function updateTestRunWithEvidence(
-  testRunId: string,
-  evidenceUrl: string
-): Promise<any> {
-  // Validate the URL
-  if (!evidenceUrl || !evidenceUrl.startsWith("http")) {
-    throw new Error("Invalid evidence URL: must be a valid HTTP URL");
-  }
+const RUN_INCLUDE = {
+  project: true,
+  module: true,
+  sourceFile: true,
+  _count: { select: { testCases: true, defects: true } },
+} as const;
 
-  // Parse the Google Sheets to extract P/F/B/S
-  let parsed: ParsedEvidence;
-  try {
-    parsed = await parseGoogleSheetsCsv(evidenceUrl);
-  } catch (error) {
-    throw new Error(`Failed to parse evidence from URL: ${(error as Error).message}`);
-  }
+export async function syncTestRunFromSheet(testRunId: string, evidenceUrl: string) {
+  const counts = await parseGoogleSheet(evidenceUrl);
 
-  // Update the TestRun with the parsed values
-  const updated = await prisma.testRun.update({
+  return prisma.testRun.update({
     where: { id: testRunId },
     data: {
       evidenceUrl,
-      totalTests: parsed.total || parsed.passed + parsed.failed + parsed.blocked + parsed.skipped,
-      passed: parsed.passed,
-      failed: parsed.failed,
-      blocked: parsed.blocked,
-      skipped: parsed.skipped,
+      totalTests: counts.total,
+      passed: counts.passed,
+      failed: counts.failed,
+      blocked: counts.blocked,
+      skipped: counts.skipped,
+      status: runStatus(counts),
     },
-    include: {
-      project: true,
-      module: true,
-      sourceFile: true,
-      _count: { select: { testCases: true, defects: true } },
-    },
+    include: RUN_INCLUDE,
   });
+}
 
-  return updated;
+function runStatus(c: { total: number; passed: number; failed: number; blocked: number; pending: number }) {
+  if (c.failed > 0) return "FAILED" as const;
+  if (c.blocked > 0) return "BLOCKED" as const;
+  if (c.pending > 0) return "IN_PROGRESS" as const;
+  if (c.passed > 0) return "PASSED" as const;
+  return "UNKNOWN" as const;
 }

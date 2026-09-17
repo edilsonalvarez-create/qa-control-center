@@ -10,7 +10,7 @@ import {
 } from "../lib/google-drive.js";
 import { prisma } from "../lib/prisma.js";
 import { enqueueDriveSync, getDriveSyncStatus, beginPushIngest, ingestPushedFile, finishPushIngest } from "../services/drive-sync-service.js";
-import { DEFAULT_DRIVE_FOLDER_ID, DRIVE_FOLDER_URL, nextDriveSyncAt } from "../services/drive-sync-policy.js";
+import { DEFAULT_DRIVE_FOLDER_ID, DRIVE_FOLDER_URL } from "../services/drive-sync-policy.js";
 
 export async function driveRoutes(app: FastifyInstance, config: AppConfig) {
   app.get("/api/v1/integrations/google/status", { preHandler: [app.authenticate] }, async () => {
@@ -21,11 +21,9 @@ export async function driveRoutes(app: FastifyInstance, config: AppConfig) {
       folderUrl: `https://drive.google.com/drive/folders/${auth.folderId}`,
       defaultFolderId: DEFAULT_DRIVE_FOLDER_ID,
       defaultFolderUrl: DRIVE_FOLDER_URL,
-      nextSyncAt: nextDriveSyncAt(new Date(), config.DRIVE_SYNC_TZ).toISOString(),
       running: sync.running,
       lastRun: sync.last,
       recentRuns: sync.recent,
-      schedule: sync.schedule,
       pushIngestEnabled: sync.pushIngestEnabled,
     };
   });
@@ -73,15 +71,10 @@ export async function driveRoutes(app: FastifyInstance, config: AppConfig) {
     }
   });
 
+  // The only way to pull from Drive: a human with QA_MANAGER+ pressing the
+  // button in Settings. The 06:00 scheduler and its /cron trigger are gone.
   app.post("/api/v1/integrations/google/sync", { preHandler: [app.authenticate, app.requireManager] }, async () => {
     return enqueueDriveSync(config, "MANUAL");
-  });
-
-  app.post("/api/v1/integrations/google/cron", async (request, reply) => {
-    if (!cronAuthorized(request, config)) {
-      return reply.code(401).send({ error: "Unauthorized" });
-    }
-    return enqueueDriveSync(config, "HTTP");
   });
 
   app.post("/api/v1/integrations/google/ingest/begin", async (request, reply) => {

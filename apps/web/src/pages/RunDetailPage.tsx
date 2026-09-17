@@ -93,12 +93,7 @@ export function RunDetailPage() {
         ))}
       </div>
       <div className="card">
-        <EvidenceUrlInput testRunId={run.id} onSuccess={reload} />
-        {run.evidenceUrl && (
-          <p className="mt-2 text-xs text-slate-500">
-            Vinculado desde: <a href={run.evidenceUrl} target="_blank" rel="noreferrer" className="text-cyan-600 hover:underline">Google Sheet</a>
-          </p>
-        )}
+        <EvidenceUrlInput testRunId={run.id} currentUrl={run.evidenceUrl} onSynced={reload} />
       </div>
       {run.observations && (
         <div className="card">

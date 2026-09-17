@@ -18,9 +18,7 @@ const envSchema = z.object({
   GOOGLE_REFRESH_TOKEN: z.string().optional(),
   GOOGLE_SERVICE_ACCOUNT_JSON: z.string().optional(),
   GOOGLE_DRIVE_FOLDER_ID: z.string().default("1hCe3QBPraJEvt6H60KcCOiNIFzG6zdL-"),
-  DRIVE_SYNC_CRON: z.string().default("0 6 * * *"),
   DRIVE_SYNC_TZ: z.string().default("America/Bogota"),
-  DRIVE_SYNC_ENABLED: z.enum(["true", "false", "1", "0"]).optional().default("true"),
   DRIVE_SYNC_MAX_FILES: z.coerce.number().default(400),
   CRON_SECRET: z.string().optional(),
 });
