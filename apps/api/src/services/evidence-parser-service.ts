@@ -1,197 +1,172 @@
-/**
- * Parse Google Sheets to extract P/F/B/S (Passed/Failed/Blocked/Skipped) counts.
- * Supports common headers in Spanish and English.
- */
+import { mapStatus, normalizeKey } from "../parsers/normalize.js";
 
 export interface ParsedEvidence {
+  total: number;
   passed: number;
   failed: number;
   blocked: number;
   skipped: number;
-  total?: number;
+  /// Rows whose status is pending/not-yet-run. Counted in `total` but in none
+  /// of P/F/B/S, which is why those four rarely add up to `total`.
+  pending: number;
 }
 
-/**
- * Extract sheet ID from Google Sheets URL.
- * Supports formats:
- * - https://docs.google.com/spreadsheets/d/SHEET_ID/edit...
- * - https://docs.google.com/spreadsheets/d/SHEET_ID
- */
 export function extractSheetId(url: string): string | null {
   const match = url.match(/\/spreadsheets\/d\/([a-zA-Z0-9-_]+)/);
   return match ? match[1] : null;
 }
 
-/**
- * Fetch and parse Google Sheets data using the public CSV export URL.
- * This avoids needing OAuth for publicly shared sheets.
- */
-export async function parseGoogleSheetsCsv(url: string): Promise<ParsedEvidence> {
+function csvExportUrl(url: string): string {
   const sheetId = extractSheetId(url);
   if (!sheetId) {
-    throw new Error("Invalid Google Sheets URL: could not extract sheet ID");
+    throw Object.assign(new Error("El enlace no es una hoja de Google Sheets válida."), { statusCode: 400 });
   }
-
-  // Extract tab ID from URL if present (gid parameter), otherwise use 0 (first sheet)
-  const tabIdMatch = url.match(/#gid=(\d+)/);
-  const tabId = tabIdMatch ? tabIdMatch[1] : "0";
-
-  // Use public CSV export URL
-  const csvUrl = `https://docs.google.com/spreadsheets/d/${sheetId}/export?format=csv&gid=${tabId}`;
-
-  try {
-    const response = await fetch(csvUrl, {
-      headers: {
-        "User-Agent": "QA-Control-Center/1.0",
-      },
-    });
-
-    if (!response.ok) {
-      throw new Error(`Failed to fetch sheet: HTTP ${response.status}`);
-    }
-
-    const csv = await response.text();
-    return parseCsvData(csv);
-  } catch (error) {
-    const err = error as Error;
-    throw new Error(`Failed to parse evidence URL: ${err.message}`);
-  }
+  const gid = url.match(/[#&?]gid=(\d+)/);
+  const tab = gid ? `&gid=${gid[1]}` : "";
+  return `https://docs.google.com/spreadsheets/d/${sheetId}/export?format=csv${tab}`;
 }
 
-/**
- * Parse CSV data to extract P/F/B/S counts.
- * Searches for headers matching common patterns and extracts corresponding values.
- */
-function parseCsvData(csv: string): ParsedEvidence {
-  const lines = csv.trim().split("\n");
-  if (lines.length === 0) {
-    throw new Error("Empty CSV data");
-  }
-
-  // Parse the first row as headers
-  const headers = parseCSVLine(lines[0]);
-
-  const result: ParsedEvidence = {
-    passed: 0,
-    failed: 0,
-    blocked: 0,
-    skipped: 0,
-  };
-
-  // Column indices for each metric
-  let passedIdx = -1;
-  let failedIdx = -1;
-  let blockedIdx = -1;
-  let skippedIdx = -1;
-
-  // Find column indices by header matching
-  for (let j = 0; j < headers.length; j++) {
-    const header = headers[j]?.toLowerCase().trim() || "";
-
-    if (passedIdx === -1 && (header.includes("pasado") || header.includes("passed") || header === "p")) {
-      passedIdx = j;
-    } else if (failedIdx === -1 && (header.includes("fallo") || header.includes("failed") || header === "f")) {
-      failedIdx = j;
-    } else if (blockedIdx === -1 && (header.includes("bloqueado") || header.includes("blocked") || header === "b")) {
-      blockedIdx = j;
-    } else if (skippedIdx === -1 && (header.includes("saltado") || header.includes("skipped") || header === "s")) {
-      skippedIdx = j;
-    }
-  }
-
-  // If we found columns via headers, extract values from data rows
-  if (passedIdx !== -1 || failedIdx !== -1 || blockedIdx !== -1 || skippedIdx !== -1) {
-    // Look for numeric values in identified columns (skip header row)
-    for (let i = 1; i < lines.length; i++) {
-      const line = parseCSVLine(lines[i]);
-
-      if (passedIdx !== -1 && line[passedIdx]) {
-        const val = parseInt(line[passedIdx].trim(), 10);
-        if (!isNaN(val) && val > 0) result.passed = val;
-      }
-      if (failedIdx !== -1 && line[failedIdx]) {
-        const val = parseInt(line[failedIdx].trim(), 10);
-        if (!isNaN(val) && val > 0) result.failed = val;
-      }
-      if (blockedIdx !== -1 && line[blockedIdx]) {
-        const val = parseInt(line[blockedIdx].trim(), 10);
-        if (!isNaN(val) && val > 0) result.blocked = val;
-      }
-      if (skippedIdx !== -1 && line[skippedIdx]) {
-        const val = parseInt(line[skippedIdx].trim(), 10);
-        if (!isNaN(val) && val > 0) result.skipped = val;
-      }
-    }
-  } else {
-    // Fallback: search entire sheet for keywords and extract adjacent numbers
-    for (let i = 0; i < lines.length; i++) {
-      const line = parseCSVLine(lines[i]);
-
-      for (let j = 0; j < line.length; j++) {
-        const cellLower = line[j]?.toLowerCase().trim() || "";
-        const numValue = parseInt(line[j] || "", 10);
-
-        if (!isNaN(numValue) && numValue >= 0) {
-          if (cellLower.includes("pasado") || cellLower.includes("passed")) {
-            result.passed = numValue;
-          } else if (cellLower.includes("fallo") || cellLower.includes("failed")) {
-            result.failed = numValue;
-          } else if (cellLower.includes("bloqueado") || cellLower.includes("blocked")) {
-            result.blocked = numValue;
-          } else if (cellLower.includes("saltado") || cellLower.includes("skipped")) {
-            result.skipped = numValue;
-          }
-        }
-      }
-    }
-  }
-
-  // Validate that we found at least some values
-  const hasValues = result.passed + result.failed + result.blocked + result.skipped > 0;
-  if (!hasValues) {
-    throw new Error(
-      "Could not find P/F/B/S values in the provided sheet. " +
-      "Make sure your sheet has columns labeled: Pasados/Fallos/Bloqueados/Saltados " +
-      "(or Passed/Failed/Blocked/Skipped in English)"
+export async function parseGoogleSheet(url: string): Promise<ParsedEvidence> {
+  const response = await fetch(csvExportUrl(url), { redirect: "follow" });
+  if (!response.ok) {
+    throw Object.assign(
+      new Error(
+        `Google respondió ${response.status} al descargar la hoja. ` +
+          'Comparte la hoja como "Cualquier persona con el enlace puede ver".',
+      ),
+      { statusCode: 400 },
     );
   }
 
-  // Calculate total
-  result.total = result.passed + result.failed + result.blocked + result.skipped;
+  const body = await response.text();
+  // A sheet that isn't link-shared returns the Google sign-in page as HTML
+  // with a 200, so the status code alone doesn't tell us the fetch worked.
+  if (/^\s*</.test(body)) {
+    throw Object.assign(
+      new Error(
+        "La hoja no es accesible públicamente: Google devolvió una página de inicio de sesión. " +
+          'Compártela como "Cualquier persona con el enlace puede ver".',
+      ),
+      { statusCode: 400 },
+    );
+  }
 
+  return countExecutionStatus(body);
+}
+
+/**
+ * Count one row per test case from the "Estado Ejecución" column. Reuses the
+ * importer's mapStatus so a sheet and an imported matrix classify identically.
+ */
+export function countExecutionStatus(csv: string): ParsedEvidence {
+  const rows = parseCsv(csv);
+  if (!rows.length) {
+    throw Object.assign(new Error("La hoja está vacía."), { statusCode: 400 });
+  }
+
+  const header = findHeaderRow(rows);
+  if (!header) {
+    throw Object.assign(
+      new Error('La hoja no tiene una columna "Estado Ejecución".'),
+      { statusCode: 400 },
+    );
+  }
+
+  const result: ParsedEvidence = { total: 0, passed: 0, failed: 0, blocked: 0, skipped: 0, pending: 0 };
+
+  for (const row of rows.slice(header.rowIndex + 1)) {
+    const raw = row[header.columnIndex]?.trim();
+    if (!raw) continue;
+    result.total++;
+    switch (mapStatus(raw)) {
+      case "PASS":
+        result.passed++;
+        break;
+      case "FAIL":
+        result.failed++;
+        break;
+      case "BLOCKED":
+        result.blocked++;
+        break;
+      case "SKIPPED":
+        result.skipped++;
+        break;
+      default:
+        result.pending++;
+    }
+  }
+
+  if (!result.total) {
+    throw Object.assign(
+      new Error('La columna "Estado Ejecución" no tiene ninguna fila con valor.'),
+      { statusCode: 400 },
+    );
+  }
   return result;
 }
 
 /**
- * Parse a CSV line handling quoted fields.
+ * QA matrices often carry a title banner above the real header, so the column
+ * names are not guaranteed to be on row 0.
  */
-function parseCSVLine(line: string): string[] {
-  const result: string[] = [];
-  let current = "";
-  let inQuotes = false;
+function findHeaderRow(rows: string[][]): { rowIndex: number; columnIndex: number } | undefined {
+  const limit = Math.min(rows.length, 20);
+  for (let r = 0; r < limit; r++) {
+    for (let c = 0; c < rows[r].length; c++) {
+      if (normalizeKey(rows[r][c] ?? "") === "estado ejecucion") {
+        return { rowIndex: r, columnIndex: c };
+      }
+    }
+  }
+  return undefined;
+}
 
-  for (let i = 0; i < line.length; i++) {
-    const char = line[i];
-    const nextChar = line[i + 1];
+/**
+ * Full CSV reader: quoted cells in these matrices contain commas AND newlines
+ * (steps, expected results), so the file cannot be split on "\n" by line.
+ */
+function parseCsv(input: string): string[][] {
+  const rows: string[][] = [];
+  let row: string[] = [];
+  let cell = "";
+  let quoted = false;
+
+  for (let i = 0; i < input.length; i++) {
+    const char = input[i];
+
+    if (quoted) {
+      if (char === '"') {
+        if (input[i + 1] === '"') {
+          cell += '"';
+          i++;
+        } else {
+          quoted = false;
+        }
+      } else {
+        cell += char;
+      }
+      continue;
+    }
 
     if (char === '"') {
-      if (inQuotes && nextChar === '"') {
-        // Escaped quote
-        current += '"';
-        i++;
-      } else {
-        // Toggle quote mode
-        inQuotes = !inQuotes;
-      }
-    } else if (char === "," && !inQuotes) {
-      // Field separator
-      result.push(current);
-      current = "";
+      quoted = true;
+    } else if (char === ",") {
+      row.push(cell);
+      cell = "";
+    } else if (char === "\n" || char === "\r") {
+      if (char === "\r" && input[i + 1] === "\n") i++;
+      row.push(cell);
+      rows.push(row);
+      row = [];
+      cell = "";
     } else {
-      current += char;
+      cell += char;
     }
   }
 
-  result.push(current);
-  return result;
+  if (cell || row.length) {
+    row.push(cell);
+    rows.push(row);
+  }
+  return rows.filter((r) => r.some((c) => c.trim()));
 }

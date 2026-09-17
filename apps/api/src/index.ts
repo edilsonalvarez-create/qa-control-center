@@ -15,7 +15,6 @@ import { matrixRoutes } from "./routes/matrix.js";
 import { usersRoutes } from "./routes/users.js";
 import { permissionsRoutes } from "./routes/permissions.js";
 import { driveRoutes } from "./routes/drive.js";
-import { startDriveSyncScheduler } from "./jobs/drive-cron.js";
 import { repairProjectAttribution } from "./services/project-attribution.js";
 import { repairManualRunGrouping } from "./services/matrix-service.js";
 
@@ -83,7 +82,6 @@ const { app, config } = await build();
 try {
   await app.listen({ port: config.PORT, host: "0.0.0.0" });
   logger.info(`API listening on ${config.PORT}`);
-  startDriveSyncScheduler(config);
   repairProjectAttribution().catch((err) => logger.error({ err }, "project attribution repair failed"));
   repairManualRunGrouping()
     .then((result) => result.moved && logger.info(result, "split manual cases that were merged into the wrong run"))

@@ -24,7 +24,7 @@ import { sanitizeQuery } from "../lib/auth.js";
 import { requireModule } from "../lib/modules.js";
 import { requirePermission } from "../lib/permissions.js";
 import { deleteTestRun } from "../services/testrun-service.js";
-import { updateTestRunWithEvidence } from "../services/testrun-evidence-service.js";
+import { syncTestRunFromSheet } from "../services/testrun-evidence-service.js";
 
 export async function domainRoutes(app: FastifyInstance) {
   app.get("/api/v1/dashboard", { preHandler: [app.authenticate, requireModule("dashboard")] }, async (request) => {
@@ -130,9 +130,8 @@ export async function domainRoutes(app: FastifyInstance) {
       let run: any;
 
       try {
-        // If evidenceUrl is provided, parse it and update P/F/B/S
         if (body.data.evidenceUrl) {
-          run = await updateTestRunWithEvidence(id, body.data.evidenceUrl);
+          run = await syncTestRunFromSheet(id, body.data.evidenceUrl);
         } else if (body.data.goNoGo !== undefined) {
           // Otherwise, just update goNoGo
           run = await prisma.testRun.update({

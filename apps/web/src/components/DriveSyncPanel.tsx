@@ -12,7 +12,6 @@ type DriveStatus = {
   folderUrl: string;
   lastSyncAt: string | null;
   lastError: string | null;
-  nextSyncAt: string;
   running: boolean;
   lastRun: {
     id: string;
@@ -37,7 +36,6 @@ type DriveStatus = {
     filesSkipped: number;
     filesFailed: number;
   }>;
-  schedule: { cron: string; timezone: string; enabled: boolean };
   pushIngestEnabled: boolean;
 };
 
@@ -142,11 +140,7 @@ export function DriveSyncPanel({ compact = false }: { compact?: boolean }) {
           {status.googleEmail ? ` · ${status.googleEmail}` : null}
         </p>
         <p>
-          Próxima corrida:{" "}
-          <strong>
-            {new Date(status.nextSyncAt).toLocaleString("es-CO", { timeZone: "America/Bogota" })}{" "}
-            (America/Bogota)
-          </strong>
+          Sincronización: <strong>solo manual</strong>
         </p>
         <p>
           Última sync:{" "}

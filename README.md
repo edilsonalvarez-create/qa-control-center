@@ -74,11 +74,10 @@ See [.env.example](.env.example). Never commit `.env`.
 | GET | `/api/v1/integrations/google/status` | Drive connection + last sync |
 | GET | `/api/v1/integrations/google/start` | ADMIN OAuth URL |
 | POST | `/api/v1/integrations/google/sync` | Manual sync (ADMIN / QA_MANAGER) |
-| POST | `/api/v1/integrations/google/cron` | Scheduled tick (`CRON_SECRET`) |
 
 ## Google Drive
 
-Every day at **06:00 America/Bogota** the Railway API lists the [pruebas qa](https://drive.google.com/drive/folders/1hCe3QBPraJEvt6H60KcCOiNIFzG6zdL-) folder, downloads **new or changed** files, and runs the same import pipeline used by Import Center. The Vercel UI only displays the result — it does not talk to Drive.
+Drive is pulled **only on demand**: an ADMIN/QA_MANAGER presses **Sincronizar ahora** in Settings. There is no scheduled sync — the 06:00 job and its `/cron` endpoint were removed. Test Runs can also be fed per-run from a Google Sheet by pasting its link in the run detail (reads the **Estado Ejecución** column, one row per case).
 
 - New structured matrices/reports **auto-commit** (dashboard, test runs, cases, defects, evidence).
 - `Copia de…` / same fingerprint stay in **preview** (never auto-merged).
