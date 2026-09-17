@@ -24,7 +24,7 @@ import { sanitizeQuery } from "../lib/auth.js";
 import { requireModule } from "../lib/modules.js";
 import { requirePermission } from "../lib/permissions.js";
 import { deleteTestRun } from "../services/testrun-service.js";
-import { syncTestRunFromSheet } from "../services/testrun-evidence-service.js";
+import { syncTestRunFromSheet, unlinkTestRunSheet } from "../services/testrun-evidence-service.js";
 
 export async function domainRoutes(app: FastifyInstance) {
   app.get("/api/v1/dashboard", { preHandler: [app.authenticate, requireModule("dashboard")] }, async (request) => {
@@ -119,7 +119,8 @@ export async function domainRoutes(app: FastifyInstance) {
       const body = z
         .object({
           goNoGo: z.enum(["GO", "NO_GO"]).nullable().optional(),
-          evidenceUrl: z.string().url().optional(),
+          // null unlinks the sheet and recounts from the run's own cases.
+          evidenceUrl: z.string().url().nullable().optional(),
         })
         .safeParse(request.body);
       if (!body.success) return reply.code(400).send({ error: "Invalid payload" });
@@ -132,8 +133,9 @@ export async function domainRoutes(app: FastifyInstance) {
       try {
         if (body.data.evidenceUrl) {
           run = await syncTestRunFromSheet(id, body.data.evidenceUrl);
+        } else if (body.data.evidenceUrl === null) {
+          run = await unlinkTestRunSheet(id);
         } else if (body.data.goNoGo !== undefined) {
-          // Otherwise, just update goNoGo
           run = await prisma.testRun.update({
             where: { id },
             data: { goNoGo: body.data.goNoGo },
