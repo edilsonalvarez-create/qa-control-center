@@ -7,6 +7,7 @@ import { canEditRole, hasPermission } from "../lib/permissions";
 import { formatDateOnly } from "../lib/dates";
 import { GoNoGoCell } from "../components/GoNoGo";
 import { StatusBadge } from "../components/StatusBadge";
+import { EvidenceUrlInput } from "../components/EvidenceUrlInput";
 
 export function RunDetailPage() {
   const { id } = useParams();
@@ -90,6 +91,14 @@ export function RunDetailPage() {
             <p className="text-xl font-semibold">{run[k]}</p>
           </div>
         ))}
+      </div>
+      <div className="card">
+        <EvidenceUrlInput testRunId={run.id} onSuccess={reload} />
+        {run.evidenceUrl && (
+          <p className="mt-2 text-xs text-slate-500">
+            Vinculado desde: <a href={run.evidenceUrl} target="_blank" rel="noreferrer" className="text-cyan-600 hover:underline">Google Sheet</a>
+          </p>
+        )}
       </div>
       {run.observations && (
         <div className="card">

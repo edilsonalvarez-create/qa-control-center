@@ -186,6 +186,8 @@ model TestRun {
   fingerprint   String?
   sourceFileId  String?
   sourceFile    SourceFile? @relation(fields: [sourceFileId], references: [id])
+  /// Manual Google Sheets URL for evidence. QA uploads link to override auto-sync.
+  evidenceUrl   String?
   createdAt     DateTime    @default(now())
   testCases     TestCase[]
   defects       Defect[]

@@ -24,6 +24,7 @@ import { sanitizeQuery } from "../lib/auth.js";
 import { requireModule } from "../lib/modules.js";
 import { requirePermission } from "../lib/permissions.js";
 import { deleteTestRun } from "../services/testrun-service.js";
+import { updateTestRunWithEvidence } from "../services/testrun-evidence-service.js";
 
 export async function domainRoutes(app: FastifyInstance) {
   app.get("/api/v1/dashboard", { preHandler: [app.authenticate, requireModule("dashboard")] }, async (request) => {
@@ -116,17 +117,41 @@ export async function domainRoutes(app: FastifyInstance) {
     async (request, reply) => {
       const { id } = request.params as { id: string };
       const body = z
-        .object({ goNoGo: z.enum(["GO", "NO_GO"]).nullable() })
+        .object({
+          goNoGo: z.enum(["GO", "NO_GO"]).nullable().optional(),
+          evidenceUrl: z.string().url().optional(),
+        })
         .safeParse(request.body);
       if (!body.success) return reply.code(400).send({ error: "Invalid payload" });
       const existing = await prisma.testRun.findUnique({ where: { id } });
       if (!existing) return reply.code(404).send({ error: "Not found" });
-      const run = await prisma.testRun.update({ where: { id }, data: { goNoGo: body.data.goNoGo } });
+
       const user = request.user as { sub: string };
-      await prisma.auditLog.create({
-        data: { userId: user.sub, action: "TEST_RUN_UPDATE", entity: "TestRun", entityId: id, payload: body.data },
-      });
-      return run;
+      let run: any;
+
+      try {
+        // If evidenceUrl is provided, parse it and update P/F/B/S
+        if (body.data.evidenceUrl) {
+          run = await updateTestRunWithEvidence(id, body.data.evidenceUrl);
+        } else if (body.data.goNoGo !== undefined) {
+          // Otherwise, just update goNoGo
+          run = await prisma.testRun.update({
+            where: { id },
+            data: { goNoGo: body.data.goNoGo },
+            include: { project: true, module: true, sourceFile: true, _count: { select: { testCases: true, defects: true } } },
+          });
+        } else {
+          return reply.code(400).send({ error: "Either goNoGo or evidenceUrl is required" });
+        }
+
+        await prisma.auditLog.create({
+          data: { userId: user.sub, action: "TEST_RUN_UPDATE", entity: "TestRun", entityId: id, payload: body.data },
+        });
+        return run;
+      } catch (error) {
+        const e = error as Error & { statusCode?: number };
+        return reply.code(e.statusCode ?? 400).send({ error: e.message });
+      }
     },
   );
 
