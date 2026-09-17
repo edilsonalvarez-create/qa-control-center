@@ -19,12 +19,7 @@ const SHEET = [
 describe("countExecutionStatus", () => {
   it("counts one row per case from the Estado Ejecución column", () => {
     const r = countExecutionStatus(SHEET);
-    expect(r.total).toBe(8);
-    expect(r.passed).toBe(3);
-    expect(r.failed).toBe(2);
-    expect(r.blocked).toBe(1);
-    expect(r.skipped).toBe(1);
-    expect(r.pending).toBe(1);
+    expect(r).toEqual({ total: 8, passed: 3, failed: 2, blocked: 1, skipped: 1, pending: 1 });
   });
 
   it("does not split rows on newlines inside quoted cells", () => {
@@ -38,16 +33,28 @@ describe("countExecutionStatus", () => {
     expect(r.passed).toBe(18);
   });
 
+  it("falls back to a plain Estado column", () => {
+    const r = countExecutionStatus(["ID,Estado", "TC-1,Pasó", "TC-2,PASA", "TC-3,FALLÓ"].join("\n"));
+    expect(r.total).toBe(3);
+    expect(r.passed).toBe(2);
+    expect(r.failed).toBe(1);
+  });
+
+  it("prefers Estado Ejecución over a generic Estado in the same sheet", () => {
+    const r = countExecutionStatus(["ID,Estado,Estado Ejecución", "TC-1,Cerrado,Fallido"].join("\n"));
+    expect(r.failed).toBe(1);
+  });
+
   it("ignores rows with an empty status", () => {
-    const r = countExecutionStatus("ID,Estado Ejecución\nTC-1,Exitoso\nTC-2,\nTC-3,   ");
+    const r = countExecutionStatus(["ID,Estado Ejecución", "TC-1,Exitoso", "TC-2,", "TC-3,   "].join("\n"));
     expect(r.total).toBe(1);
   });
 
-  it("rejects a sheet without the column", () => {
-    expect(() => countExecutionStatus("ID,Resultado\nTC-1,Exitoso")).toThrow(/Estado Ejecución/);
+  it("rejects a sheet without any status column", () => {
+    expect(() => countExecutionStatus("ID,Componente\nTC-1,Exitoso")).toThrow(/Estado/);
   });
 
-  it("rejects a column with no filled rows", () => {
+  it("rejects a status column with no filled rows", () => {
     expect(() => countExecutionStatus("ID,Estado Ejecución\nTC-1,")).toThrow(/ninguna fila/);
   });
 });

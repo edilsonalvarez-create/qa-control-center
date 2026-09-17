@@ -67,7 +67,7 @@ export function countExecutionStatus(csv: string): ParsedEvidence {
   const header = findHeaderRow(rows);
   if (!header) {
     throw Object.assign(
-      new Error('La hoja no tiene una columna "Estado Ejecución".'),
+      new Error('La hoja no tiene una columna "Estado Ejecución" ni "Estado".'),
       { statusCode: 400 },
     );
   }
@@ -106,19 +106,23 @@ export function countExecutionStatus(csv: string): ParsedEvidence {
 }
 
 /**
- * QA matrices often carry a title banner above the real header, so the column
- * names are not guaranteed to be on row 0.
+ * Matrices label this column either "Estado Ejecución" or just "Estado", so the
+ * explicit one wins and the generic one is only a fallback. "Estado Defecto" is
+ * a different column and must never be mistaken for it.
  */
+const STATUS_HEADERS = ["estado ejecucion", "estado de ejecucion", "resultado ejecucion", "estado", "resultado"];
+
 function findHeaderRow(rows: string[][]): { rowIndex: number; columnIndex: number } | undefined {
+  let best: { rowIndex: number; columnIndex: number; rank: number } | undefined;
   const limit = Math.min(rows.length, 20);
   for (let r = 0; r < limit; r++) {
     for (let c = 0; c < rows[r].length; c++) {
-      if (normalizeKey(rows[r][c] ?? "") === "estado ejecucion") {
-        return { rowIndex: r, columnIndex: c };
-      }
+      const rank = STATUS_HEADERS.indexOf(normalizeKey(rows[r][c] ?? ""));
+      if (rank === -1) continue;
+      if (!best || rank < best.rank) best = { rowIndex: r, columnIndex: c, rank };
     }
   }
-  return undefined;
+  return best && { rowIndex: best.rowIndex, columnIndex: best.columnIndex };
 }
 
 /**
