@@ -60,7 +60,7 @@ export function pendingCaseWhere(): Prisma.TestCaseWhereInput {
   };
 }
 
-function runScopeWhere(f: FilterQuery): Prisma.TestRunWhereInput {
+export function runScopeWhere(f: FilterQuery): Prisma.TestRunWhereInput {
   return {
     projectId: f.projectId || undefined,
     tester: f.tester ? { contains: f.tester, mode: "insensitive" } : undefined,
@@ -71,7 +71,7 @@ function runScopeWhere(f: FilterQuery): Prisma.TestRunWhereInput {
   };
 }
 
-async function moduleMatch(f: FilterQuery): Promise<Prisma.TestCaseWhereInput> {
+export async function moduleMatch(f: FilterQuery): Promise<Prisma.TestCaseWhereInput> {
   if (!f.moduleId) return {};
   const mod = await prisma.module.findUnique({ where: { id: f.moduleId }, select: { name: true } });
   return {

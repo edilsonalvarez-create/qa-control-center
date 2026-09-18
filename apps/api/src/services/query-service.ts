@@ -1,11 +1,12 @@
 import { CaseStatus, DefectStatus, Prisma, Severity } from "@prisma/client";
 import {
   caseWhere,
-  isExecutedStatus,
-  isPendingStatus,
   listableCaseWhere,
+  moduleMatch,
   panelCaseWhere,
+  runScopeWhere,
 } from "../lib/case-visibility.js";
+import { EXECUTED_CASE_STATUSES } from "../lib/case-info.js";
 import { prisma } from "../lib/prisma.js";
 import { type FilterQuery } from "../lib/filters.js";
 
@@ -27,36 +28,112 @@ function addCaseStatus(
   else acc.unknown += n;
 }
 
+/**
+ * A run's numbers come from its linked sheet when it has one: the sheet is the
+ * record of what was actually executed, while the registered cases may be a
+ * single summary row. Runs without a sheet are still counted case by case.
+ */
+export function mixFromRunCounters(run: {
+  totalTests: number;
+  passed: number;
+  failed: number;
+  blocked: number;
+  skipped: number;
+}) {
+  const mix = emptyCaseMix();
+  addCaseStatus(mix, CaseStatus.PASS, run.passed);
+  addCaseStatus(mix, CaseStatus.FAIL, run.failed);
+  addCaseStatus(mix, CaseStatus.BLOCKED, run.blocked);
+  addCaseStatus(mix, CaseStatus.SKIPPED, run.skipped);
+  const decided = run.passed + run.failed + run.blocked + run.skipped;
+  addCaseStatus(mix, CaseStatus.UNKNOWN, Math.max(0, run.totalTests - decided));
+  return mix;
+}
+
+/** The case query applies `result` itself; sheet-backed runs must be narrowed here. */
+export function narrowToResult(mix: ReturnType<typeof emptyCaseMix>, result: CaseStatus) {
+  const only = emptyCaseMix();
+  const n =
+    result === CaseStatus.PASS
+      ? mix.passed
+      : result === CaseStatus.FAIL
+        ? mix.failed
+        : result === CaseStatus.BLOCKED
+          ? mix.blocked
+          : mix.skipped;
+  addCaseStatus(only, result, n);
+  return only;
+}
+
+function addMix(acc: ReturnType<typeof emptyCaseMix>, m: ReturnType<typeof emptyCaseMix>) {
+  acc.total += m.total;
+  acc.passed += m.passed;
+  acc.failed += m.failed;
+  acc.blocked += m.blocked;
+  acc.skipped += m.skipped;
+  acc.unknown += m.unknown;
+  acc.review += m.review;
+}
+
+function isExecutedMix(m: ReturnType<typeof emptyCaseMix>) {
+  return m.passed + m.failed + m.blocked + m.skipped > 0;
+}
+
 export async function getDashboard(f: FilterQuery) {
-  const cases = await prisma.testCase.findMany({
-    where: await caseWhere(f, "informative"),
-    select: {
-      status: true,
-      testRunId: true,
-      moduleName: true,
-      testRun: {
-        select: {
-          executionDate: true,
-          projectId: true,
-          moduleId: true,
-          project: { select: { id: true, name: true, status: true, product: true } },
-        },
+  const moduleClause: Prisma.TestRunWhereInput = f.moduleId
+    ? { OR: [{ moduleId: f.moduleId }, { testCases: { some: await moduleMatch(f) } }] }
+    : {};
+
+  const [runs, cases] = await Promise.all([
+    prisma.testRun.findMany({
+      where: { AND: [runScopeWhere(f), moduleClause] },
+      select: {
+        id: true,
+        executionDate: true,
+        moduleId: true,
+        evidenceUrl: true,
+        totalTests: true,
+        passed: true,
+        failed: true,
+        blocked: true,
+        skipped: true,
+        project: { select: { id: true, name: true, status: true, product: true } },
       },
-    },
+    }),
+    prisma.testCase.findMany({
+      where: await caseWhere(f, "informative"),
+      select: { status: true, testRunId: true, moduleName: true },
+    }),
+  ]);
+
+  const casesByRun = new Map<string, typeof cases>();
+  for (const c of cases) {
+    const list = casesByRun.get(c.testRunId) ?? [];
+    list.push(c);
+    casesByRun.set(c.testRunId, list);
+  }
+
+  const narrow =
+    f.result && EXECUTED_CASE_STATUSES.includes(f.result as CaseStatus) ? (f.result as CaseStatus) : undefined;
+
+  const perRun = runs.map((run) => {
+    const own = casesByRun.get(run.id) ?? [];
+    let mix = emptyCaseMix();
+    if (run.evidenceUrl) {
+      mix = mixFromRunCounters(run);
+      if (narrow) mix = narrowToResult(mix, narrow);
+    } else {
+      for (const c of own) addCaseStatus(mix, c.status);
+    }
+    const moduleKey = run.moduleId || own.find((c) => c.moduleName)?.moduleName || "";
+    return { run, mix, moduleKey };
   });
-  const fromEstado = emptyCaseMix();
-  for (const c of cases) addCaseStatus(fromEstado, c.status);
-  const executedRunIds = new Set(cases.filter((c) => isExecutedStatus(c.status)).map((c) => c.testRunId));
-  const totals = {
-    totalTests: fromEstado.total,
-    passed: fromEstado.passed,
-    failed: fromEstado.failed,
-    blocked: fromEstado.blocked,
-    skipped: fromEstado.skipped,
-    unknown: fromEstado.unknown,
-    review: fromEstado.review,
-    runs: executedRunIds.size,
-  };
+
+  const counted = perRun.filter((p) => p.mix.total > 0);
+
+  const totals = emptyCaseMix();
+  for (const p of counted) addMix(totals, p.mix);
+  const executedRuns = counted.filter((p) => isExecutedMix(p.mix)).length;
 
   const defectWhere: Prisma.DefectWhereInput = {
     projectId: f.projectId || undefined,
@@ -81,14 +158,14 @@ export async function getDashboard(f: FilterQuery) {
     string,
     { date: string; passed: number; failed: number; blocked: number; skipped: number; unknown: number }
   >();
-  for (const c of cases) {
-    const key = c.testRun.executionDate.toISOString().slice(0, 10);
+  for (const p of counted) {
+    const key = p.run.executionDate.toISOString().slice(0, 10);
     const cur = byDayMap.get(key) ?? { date: key, passed: 0, failed: 0, blocked: 0, skipped: 0, unknown: 0 };
-    if (c.status === CaseStatus.PASS) cur.passed += 1;
-    else if (c.status === CaseStatus.FAIL) cur.failed += 1;
-    else if (c.status === CaseStatus.BLOCKED) cur.blocked += 1;
-    else if (c.status === CaseStatus.SKIPPED) cur.skipped += 1;
-    else if (isPendingStatus(c.status) || c.status === CaseStatus.REQUIRES_REVIEW) cur.unknown += 1;
+    cur.passed += p.mix.passed;
+    cur.failed += p.mix.failed;
+    cur.blocked += p.mix.blocked;
+    cur.skipped += p.mix.skipped;
+    cur.unknown += p.mix.unknown + p.mix.review;
     byDayMap.set(key, cur);
   }
 
@@ -102,17 +179,17 @@ export async function getDashboard(f: FilterQuery) {
       mix: ReturnType<typeof emptyCaseMix>;
     }
   >();
-  for (const c of cases) {
-    const p = c.testRun.project;
-    const cur = projectMix.get(p.id) ?? {
-      id: p.id,
-      name: p.name,
-      status: p.status,
-      product: p.product,
+  for (const p of counted) {
+    const proj = p.run.project;
+    const cur = projectMix.get(proj.id) ?? {
+      id: proj.id,
+      name: proj.name,
+      status: proj.status,
+      product: proj.product,
       mix: emptyCaseMix(),
     };
-    addCaseStatus(cur.mix, c.status);
-    projectMix.set(p.id, cur);
+    addMix(cur.mix, p.mix);
+    projectMix.set(proj.id, cur);
   }
   const projectIds = [...projectMix.keys()];
   const projectDefects = projectIds.length
@@ -138,9 +215,13 @@ export async function getDashboard(f: FilterQuery) {
     openDefects: openByProject.get(p.id) ?? 0,
   }));
 
-  const moduleKey = (c: (typeof cases)[number]) => c.testRun.moduleId || c.moduleName || "";
-  const informativeModuleCount = new Set(cases.map(moduleKey).filter(Boolean)).size;
-  const testedModuleCount = new Set(cases.filter((c) => isExecutedStatus(c.status)).map(moduleKey).filter(Boolean)).size;
+  const informativeModuleCount = new Set(counted.map((p) => p.moduleKey).filter(Boolean)).size;
+  const testedModuleCount = new Set(
+    counted
+      .filter((p) => isExecutedMix(p.mix))
+      .map((p) => p.moduleKey)
+      .filter(Boolean),
+  ).size;
   const coveragePct = informativeModuleCount ? Math.round((testedModuleCount / informativeModuleCount) * 100) : 0;
 
   const severityCounts = {
@@ -152,10 +233,10 @@ export async function getDashboard(f: FilterQuery) {
   };
 
   return {
-    empty: cases.length === 0,
+    empty: counted.length === 0,
     kpis: {
-      totalTests: totals.totalTests,
-      executedRuns: totals.runs,
+      totalTests: totals.total,
+      executedRuns,
       passed: totals.passed,
       failed: totals.failed,
       blocked: totals.blocked,
