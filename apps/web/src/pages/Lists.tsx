@@ -6,6 +6,7 @@ import { useAuth } from "../lib/auth";
 import { useFilters } from "../lib/filters";
 import { canEditRole, hasPermission } from "../lib/permissions";
 import { formatDateOnly } from "../lib/dates";
+import { pendingOf } from "../lib/runs";
 import { useApiList } from "../hooks/useApiList";
 import { GoNoGoCell } from "../components/GoNoGo";
 import { CoverageDot, StatusBadge } from "../components/StatusBadge";
@@ -60,6 +61,7 @@ export function RunsPage() {
             <th>Env</th>
             <th>Total</th>
             <th>P/F/B/S</th>
+            <th>Pend.</th>
             <th>Estado</th>
             <th>Origen</th>
             <th>Go / No Go</th>
@@ -82,6 +84,7 @@ export function RunsPage() {
               <td>
                 {r.passed}/{r.failed}/{r.blocked}/{r.skipped}
               </td>
+              <td className={pendingOf(r) > 0 ? "font-semibold text-sky-600 dark:text-sky-400" : ""}>{pendingOf(r)}</td>
               <td>
                 <StatusBadge value={r.status} />
               </td>

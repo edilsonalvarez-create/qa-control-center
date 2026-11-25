@@ -5,6 +5,7 @@ import { api } from "../lib/api";
 import { useAuth } from "../lib/auth";
 import { canEditRole, hasPermission } from "../lib/permissions";
 import { formatDateOnly } from "../lib/dates";
+import { pendingOf } from "../lib/runs";
 import { GoNoGoCell } from "../components/GoNoGo";
 import { StatusBadge } from "../components/StatusBadge";
 import { EvidenceUrlInput } from "../components/EvidenceUrlInput";
@@ -84,13 +85,17 @@ export function RunDetailPage() {
           </div>
         </div>
       </div>
-      <div className="grid grid-cols-5 gap-3">
+      <div className="grid grid-cols-3 gap-3 sm:grid-cols-6">
         {(["totalTests", "passed", "failed", "blocked", "skipped"] as const).map((k) => (
           <div key={k} className="card text-center">
             <p className="text-xs uppercase text-slate-500">{k}</p>
             <p className="text-xl font-semibold">{run[k]}</p>
           </div>
         ))}
+        <div className="card text-center">
+          <p className="text-xs uppercase text-slate-500">pending</p>
+          <p className={`text-xl font-semibold ${pendingOf(run) > 0 ? "text-sky-600 dark:text-sky-400" : ""}`}>{pendingOf(run)}</p>
+        </div>
       </div>
       <div className="card">
         <EvidenceUrlInput testRunId={run.id} currentUrl={run.evidenceUrl} onSynced={reload} />

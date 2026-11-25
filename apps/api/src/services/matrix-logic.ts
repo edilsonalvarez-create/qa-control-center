@@ -11,8 +11,18 @@ export function toCaseStatus(raw?: string | null): CaseStatus {
     : CaseStatus.REQUIRES_REVIEW;
 }
 
-/** Roll a run's status up from its case counters (same rule as the importer). */
-export function deriveRunStatus(counts: { passed: number; failed: number; blocked: number }): RunStatus {
+/** Cases of a run that were loaded but never executed (not P/F/B/S). */
+export function pendingCount(c: { total: number; passed: number; failed: number; blocked: number; skipped?: number }): number {
+  return Math.max(0, c.total - c.passed - c.failed - c.blocked - (c.skipped ?? 0));
+}
+
+/**
+ * Roll a run's status up from its case counters (same rule as the importer).
+ * Any pending case makes the WHOLE run PENDING: a run that could not be fully
+ * evidenced must not read as Blocked/Passed/Failed.
+ */
+export function deriveRunStatus(counts: { passed: number; failed: number; blocked: number; pending?: number }): RunStatus {
+  if ((counts.pending ?? 0) > 0) return RunStatus.PENDING;
   if (counts.failed > 0) return RunStatus.FAILED;
   if (counts.blocked > 0) return RunStatus.BLOCKED;
   if (counts.passed > 0) return RunStatus.PASSED;

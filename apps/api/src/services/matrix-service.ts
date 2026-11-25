@@ -3,7 +3,7 @@ import { z } from "zod";
 import { prisma } from "../lib/prisma.js";
 import { asEnv, asSev, asTestType } from "../parsers/enums.js";
 import { fingerprint, mapSeverity } from "../parsers/normalize.js";
-import { deriveRunStatus, manualRunFingerprint, toCaseStatus, usesManualRunContainer } from "./matrix-logic.js";
+import { deriveRunStatus, pendingCount, manualRunFingerprint, toCaseStatus, usesManualRunContainer } from "./matrix-logic.js";
 import { commitImport, createPreview } from "./import-service.js";
 import { informativeCaseWhere } from "../lib/case-visibility.js";
 import type { FilterQuery } from "../lib/filters.js";
@@ -230,7 +230,7 @@ async function recomputeRun(runId: string) {
   const failed = count(CaseStatus.FAIL);
   const blocked = count(CaseStatus.BLOCKED);
   const skipped = count(CaseStatus.SKIPPED);
-  const status = deriveRunStatus({ passed, failed, blocked });
+  const status = deriveRunStatus({ passed, failed, blocked, pending: pendingCount({ total: cases.length, passed, failed, blocked, skipped }) });
   const dates = cases.map((c) => c.executionDate).filter((d): d is Date => Boolean(d));
   const executionDate = dates.length
     ? new Date(Math.max(...dates.map((d) => d.getTime())))

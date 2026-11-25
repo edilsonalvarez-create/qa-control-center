@@ -12,7 +12,7 @@ import crypto from "node:crypto";
 import type { ParsedCase } from "../parsers/types.js";
 import { upsertCatalogItems } from "./catalog-service.js";
 import { ensureProject } from "./project-service.js";
-import { deriveRunStatus } from "./matrix-logic.js";
+import { deriveRunStatus, pendingCount } from "./matrix-logic.js";
 
 function evidenceType(fileName: string): EvidenceType {
   const n = fileName.toLowerCase();
@@ -202,7 +202,7 @@ async function persistRun(opts: {
   const blocked = cases.filter((c) => c.status === "BLOCKED").length;
   const skipped = cases.filter((c) => c.status === "SKIPPED").length;
   const total = cases.length || (parsed.metrics?.totalTests ?? 0);
-  const status = deriveRunStatus({ passed, failed, blocked });
+  const status = deriveRunStatus({ passed, failed, blocked, pending: pendingCount({ total, passed, failed, blocked, skipped }) });
 
   const dateRaw = cases.find((c) => c.date)?.date ?? parsed.detectedDate;
   const execDate = dateRaw ? new Date(dateRaw) : new Date();

@@ -59,6 +59,7 @@ enum RunStatus {
   FAILED
   BLOCKED
   IN_PROGRESS
+  PENDING
   UNKNOWN
 }
 
