@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { CaseStatus, RunStatus } from "@prisma/client";
-import { deriveRunStatus, isExplicitCycle, manualRunFingerprint, toCaseStatus, usesManualRunContainer } from "../src/services/matrix-logic.js";
+import { deriveRunStatus, isExplicitCycle, pendingCount, manualRunFingerprint, toCaseStatus, usesManualRunContainer } from "../src/services/matrix-logic.js";
 import { asCase, asEnv, asSev, asTestType } from "../src/parsers/enums.js";
 import { mapSeverity } from "../src/parsers/normalize.js";
 
@@ -27,6 +27,13 @@ describe("deriveRunStatus", () => {
     expect(deriveRunStatus({ passed: 3, failed: 0, blocked: 2 })).toBe(RunStatus.BLOCKED);
     expect(deriveRunStatus({ passed: 3, failed: 0, blocked: 0 })).toBe(RunStatus.PASSED);
     expect(deriveRunStatus({ passed: 0, failed: 0, blocked: 0 })).toBe(RunStatus.UNKNOWN);
+    // 7 cases: 3 passed, 2 blocked, 2 never executed -> the whole run is PENDING.
+    const pending = pendingCount({ total: 7, passed: 3, failed: 0, blocked: 2 });
+    expect(pending).toBe(2);
+    expect(deriveRunStatus({ passed: 3, failed: 0, blocked: 2, pending })).toBe(RunStatus.PENDING);
+    // Failed wins over pending.
+    expect(deriveRunStatus({ passed: 3, failed: 1, blocked: 0, pending: 1 })).toBe(RunStatus.FAILED);
+    expect(pendingCount({ total: 3, passed: 3, failed: 0, blocked: 0 })).toBe(0);
   });
 });
 

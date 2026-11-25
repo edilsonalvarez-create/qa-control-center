@@ -9,7 +9,7 @@ type Dash = {
   kpis: Record<string, number | null>;
   byDay: Array<{ date: string; passed: number; failed: number; blocked: number; skipped: number; unknown?: number }>;
   resultMix: Record<string, number>;
-  byProject: Array<{ id: string; name: string; totalTests: number; passed: number; failed: number; openDefects: number; status: string }>;
+  byProject: Array<{ id: string; name: string; totalTests: number; passed: number; failed: number; pending: number; openDefects: number; status: string }>;
   severityCounts: Record<string, number>;
 };
 
@@ -20,7 +20,8 @@ const KPI: Array<[string, string]> = [
   ["failed", "FAIL"],
   ["blocked", "BLOCKED"],
   ["skipped", "SKIPPED"],
-  ["unknown", "Sin Estado"],
+  ["pending", "Pendientes"],
+  ["pendingRuns", "Runs pendientes"],
   ["review", "Por revisar"],
   ["defectsFound", "Defectos"],
   ["defectsOpen", "Abiertos"],
@@ -55,7 +56,7 @@ export function DashboardPage() {
   const mix = Object.entries(data.resultMix)
     .filter(([, value]) => value > 0)
     .map(([name, value]) => ({ name, value }));
-  const colors = ["#10b981", "#f43f5e", "#f59e0b", "#64748b", "#94a3b8", "#8b5cf6"];
+  const colors = ["#10b981", "#f43f5e", "#f59e0b", "#64748b", "#38bdf8", "#8b5cf6"];
   const sev = Object.entries(data.severityCounts).map(([name, value]) => ({ name, value }));
 
   return (
@@ -85,7 +86,7 @@ export function DashboardPage() {
               <Bar dataKey="failed" stackId="a" fill="#f43f5e" />
               <Bar dataKey="blocked" stackId="a" fill="#f59e0b" />
               <Bar dataKey="skipped" stackId="a" fill="#64748b" />
-              <Bar dataKey="unknown" stackId="a" fill="#94a3b8" />
+              <Bar dataKey="unknown" name="pending" stackId="a" fill="#38bdf8" />
             </BarChart>
           </ResponsiveContainer>
         </div>
@@ -113,6 +114,7 @@ export function DashboardPage() {
                 <th>Tests</th>
                 <th>PASS</th>
                 <th>FAIL</th>
+                <th>Pend.</th>
                 <th>Abiertos</th>
               </tr>
             </thead>
@@ -123,6 +125,7 @@ export function DashboardPage() {
                   <td>{p.totalTests}</td>
                   <td>{p.passed}</td>
                   <td>{p.failed}</td>
+                  <td className={p.pending > 0 ? "font-semibold text-sky-600 dark:text-sky-400" : ""}>{p.pending}</td>
                   <td>{p.openDefects}</td>
                 </tr>
               ))}

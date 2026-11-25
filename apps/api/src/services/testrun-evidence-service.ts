@@ -64,8 +64,8 @@ function writeCounts(testRunId: string, evidenceUrl: string | null, c: Counts) {
 
 function runStatus(c: Counts) {
   if (c.failed > 0) return "FAILED" as const;
+  if (c.pending > 0) return "PENDING" as const;
   if (c.blocked > 0) return "BLOCKED" as const;
-  if (c.pending > 0) return "IN_PROGRESS" as const;
   if (c.passed > 0) return "PASSED" as const;
   return "UNKNOWN" as const;
 }

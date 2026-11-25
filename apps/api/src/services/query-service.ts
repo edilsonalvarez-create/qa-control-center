@@ -92,6 +92,7 @@ export async function getDashboard(f: FilterQuery) {
         executionDate: true,
         moduleId: true,
         evidenceUrl: true,
+        status: true,
         totalTests: true,
         passed: true,
         failed: true,
@@ -134,6 +135,7 @@ export async function getDashboard(f: FilterQuery) {
   const totals = emptyCaseMix();
   for (const p of counted) addMix(totals, p.mix);
   const executedRuns = counted.filter((p) => isExecutedMix(p.mix)).length;
+  const pendingRuns = counted.filter((p) => p.run.status === "PENDING").length;
 
   const defectWhere: Prisma.DefectWhereInput = {
     projectId: f.projectId || undefined,
@@ -212,6 +214,7 @@ export async function getDashboard(f: FilterQuery) {
     passed: p.mix.passed,
     failed: p.mix.failed,
     blocked: p.mix.blocked,
+    pending: p.mix.unknown,
     openDefects: openByProject.get(p.id) ?? 0,
   }));
 
@@ -242,6 +245,8 @@ export async function getDashboard(f: FilterQuery) {
       blocked: totals.blocked,
       skipped: totals.skipped,
       unknown: totals.unknown,
+      pending: totals.unknown,
+      pendingRuns,
       review: totals.review,
       defectsFound: defects.length,
       defectsOpen: open.length,
@@ -256,7 +261,7 @@ export async function getDashboard(f: FilterQuery) {
       FAIL: totals.failed,
       BLOCKED: totals.blocked,
       SKIPPED: totals.skipped,
-      UNKNOWN: totals.unknown,
+      PENDING: totals.unknown,
       REQUIRES_REVIEW: totals.review,
     },
     byProject,
