@@ -18,12 +18,13 @@ export function pendingCount(c: { total: number; passed: number; failed: number;
 
 /**
  * Roll a run's status up from its case counters (same rule as the importer).
- * Any pending case makes the WHOLE run PENDING: a run that could not be fully
- * evidenced must not read as Blocked/Passed/Failed.
+ * A Failed case always wins (the run failed, whatever else is missing). Short of
+ * that, any pending case makes the WHOLE run PENDING: a run that could not be
+ * fully evidenced must not read as Blocked/Passed.
  */
 export function deriveRunStatus(counts: { passed: number; failed: number; blocked: number; pending?: number }): RunStatus {
-  if ((counts.pending ?? 0) > 0) return RunStatus.PENDING;
   if (counts.failed > 0) return RunStatus.FAILED;
+  if ((counts.pending ?? 0) > 0) return RunStatus.PENDING;
   if (counts.blocked > 0) return RunStatus.BLOCKED;
   if (counts.passed > 0) return RunStatus.PASSED;
   return RunStatus.UNKNOWN;

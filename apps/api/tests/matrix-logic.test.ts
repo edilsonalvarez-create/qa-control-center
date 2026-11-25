@@ -31,7 +31,8 @@ describe("deriveRunStatus", () => {
     const pending = pendingCount({ total: 7, passed: 3, failed: 0, blocked: 2 });
     expect(pending).toBe(2);
     expect(deriveRunStatus({ passed: 3, failed: 0, blocked: 2, pending })).toBe(RunStatus.PENDING);
-    expect(deriveRunStatus({ passed: 3, failed: 1, blocked: 0, pending: 1 })).toBe(RunStatus.PENDING);
+    // Failed wins over pending.
+    expect(deriveRunStatus({ passed: 3, failed: 1, blocked: 0, pending: 1 })).toBe(RunStatus.FAILED);
     expect(pendingCount({ total: 3, passed: 3, failed: 0, blocked: 0 })).toBe(0);
   });
 });
