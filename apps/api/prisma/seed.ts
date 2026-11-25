@@ -1,5 +1,6 @@
 import { PrismaClient, ProjectStatus, Role } from "@prisma/client";
 import bcrypt from "bcryptjs";
+import { deriveRunStatus, pendingCount } from "../src/services/matrix-logic.js";
 
 const prisma = new PrismaClient();
 
@@ -190,7 +191,45 @@ async function main() {
     }
   }
 
-  console.log("Seed complete: catalog only (no invented test metrics).");
+  const aligned = await alignStoredRunStatuses();
+  console.log(`Seed complete: catalog only (no invented test metrics). Aligned ${aligned} run statuses.`);
+}
+
+/** Stored status lagged the counters. Recount nothing; only rewrite status. */
+async function alignStoredRunStatuses() {
+  const runs = await prisma.testRun.findMany({
+    select: {
+      id: true,
+      status: true,
+      totalTests: true,
+      passed: true,
+      failed: true,
+      blocked: true,
+      skipped: true,
+      module: { select: { name: true } },
+    },
+  });
+  const changed: string[] = [];
+  for (const run of runs) {
+    const pending = pendingCount({
+      total: run.totalTests,
+      passed: run.passed,
+      failed: run.failed,
+      blocked: run.blocked,
+      skipped: run.skipped,
+    });
+    const status = deriveRunStatus({
+      passed: run.passed,
+      failed: run.failed,
+      blocked: run.blocked,
+      pending,
+    });
+    if (status === run.status) continue;
+    await prisma.testRun.update({ where: { id: run.id }, data: { status } });
+    changed.push(`${run.module?.name ?? run.id}: ${run.status} -> ${status}`);
+  }
+  if (changed.length) console.log(changed.join("\n"));
+  return changed.length;
 }
 
 main()
